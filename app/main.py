@@ -1,0 +1,36 @@
+"""SecureLLM — Multi-tenant Privacy Gateway Service.
+
+ALL data MUST pass through this service before reaching any LLM.
+This is the single enforcement point — no bypass is allowed.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from fastapi import FastAPI
+
+from app.config import settings
+from app.redis_client import close_redis
+from app.routes import anonymize, health, workspaces
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+)
+
+app = FastAPI(
+    title="SecureLLM",
+    description="Multi-tenant Privacy Gateway — anonymize all data before it reaches any LLM",
+    version="0.1.0",
+)
+
+# Routes
+app.include_router(health.router)
+app.include_router(anonymize.router)
+app.include_router(workspaces.router)
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await close_redis()
