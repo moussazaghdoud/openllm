@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-
-import redis.asyncio as aioredis
 
 from app.auth import require_workspace
 from app.config import settings
@@ -21,83 +18,65 @@ from app.models import (
     LLMProxyRequest,
     LLMProxyResponse,
 )
-from app.redis_client import get_redis
+from app.storage import KVStore, get_store
 
 logger = logging.getLogger("securellm.routes.anonymize")
 
 router = APIRouter(prefix="/v1", tags=["privacy-gateway"])
 
 
-# ── Anonymize ────────────────────────────────────────────
-
 @router.post("/anonymize", response_model=AnonymizeResponse)
 async def anonymize(
     req: AnonymizeRequest,
     workspace_id: str = Depends(require_workspace),
-    redis: aioredis.Redis = Depends(get_redis),
+    store: KVStore = Depends(get_store),
 ):
-    """Anonymize text through the 2-wave pipeline (PPI + PII)."""
     if req.workspace_id != workspace_id:
         raise HTTPException(403, "Workspace ID mismatch")
 
-    pipeline = await PrivacyPipeline.for_workspace(redis, workspace_id)
+    pipeline = await PrivacyPipeline.for_workspace(store, workspace_id)
     anonymized_text, mapping_id = await pipeline.anonymize(req.text)
 
     return AnonymizeResponse(anonymized_text=anonymized_text, mapping_id=mapping_id)
 
 
-# ── Deanonymize ──────────────────────────────────────────
-
 @router.post("/deanonymize", response_model=DeanonymizeResponse)
 async def deanonymize(
     req: DeanonymizeRequest,
     workspace_id: str = Depends(require_workspace),
-    redis: aioredis.Redis = Depends(get_redis),
+    store: KVStore = Depends(get_store),
 ):
-    """Restore anonymized text to its original form."""
-    # Verify mapping belongs to this workspace
     if not req.mapping_id.startswith(f"map:{workspace_id}:"):
         raise HTTPException(403, "Mapping does not belong to this workspace")
 
-    pipeline = await PrivacyPipeline.for_workspace(redis, workspace_id)
+    pipeline = await PrivacyPipeline.for_workspace(store, workspace_id)
     text = await pipeline.deanonymize(req.text, req.mapping_id)
 
     return DeanonymizeResponse(text=text)
 
 
-# ── LLM Proxy (Privacy Gateway) ─────────────────────────
-
 @router.post("/chat/completions", response_model=LLMProxyResponse)
 async def llm_proxy(
     req: LLMProxyRequest,
     workspace_id: str = Depends(require_workspace),
-    redis: aioredis.Redis = Depends(get_redis),
+    store: KVStore = Depends(get_store),
 ):
-    """Privacy-first LLM proxy.
-
-    1. Anonymize all user messages
-    2. Forward to upstream LLM
-    3. Deanonymize the response
-    4. Return clean response to caller
-
-    NO raw data ever reaches the LLM.
-    """
+    """Privacy-first LLM proxy — anonymize -> LLM -> deanonymize."""
     if req.workspace_id != workspace_id:
         raise HTTPException(403, "Workspace ID mismatch")
 
     if not settings.llm_upstream_url:
         raise HTTPException(503, "LLM upstream not configured")
 
-    pipeline = await PrivacyPipeline.for_workspace(redis, workspace_id)
+    pipeline = await PrivacyPipeline.for_workspace(store, workspace_id)
 
-    # Step 1: Anonymize all user/system messages
+    # Step 1: Anonymize user/system messages
     anonymized_messages = []
     mapping_ids: list[str] = []
 
     for msg in req.messages:
         content = msg.get("content", "")
         if not content or msg.get("role") == "assistant":
-            # Don't anonymize assistant messages (they're already sanitized)
             anonymized_messages.append(msg)
             continue
 
@@ -129,7 +108,7 @@ async def llm_proxy(
         logger.error("LLM upstream error: %s", e)
         raise HTTPException(502, f"LLM upstream error: {e}")
 
-    # Step 3: Deanonymize assistant response
+    # Step 3: Deanonymize response
     choices = llm_data.get("choices", [])
     for choice in choices:
         content = choice.get("message", {}).get("content", "")

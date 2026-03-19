@@ -8,9 +8,7 @@ import secrets
 from fastapi import Depends, Header, HTTPException, status
 
 from app.config import settings
-from app.redis_client import get_redis
-
-import redis.asyncio as aioredis
+from app.storage import KVStore, get_store
 
 
 def hash_key(key: str) -> str:
@@ -23,10 +21,10 @@ def generate_api_key() -> str:
 
 async def require_workspace(
     x_api_key: str = Header(..., alias="X-API-Key"),
-    redis: aioredis.Redis = Depends(get_redis),
+    store: KVStore = Depends(get_store),
 ) -> str:
     """Validate the API key and return the workspace_id it belongs to."""
-    ws_id = await redis.get(f"apikey:{hash_key(x_api_key)}")
+    ws_id = await store.get(f"apikey:{hash_key(x_api_key)}")
     if not ws_id:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid API key")
     return ws_id

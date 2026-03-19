@@ -10,8 +10,7 @@ import logging
 
 from fastapi import FastAPI
 
-from app.config import settings
-from app.redis_client import close_redis
+from app.storage import close_store
 from app.routes import anonymize, health, workspaces
 
 logging.basicConfig(
@@ -25,7 +24,6 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Routes
 app.include_router(health.router)
 app.include_router(anonymize.router)
 app.include_router(workspaces.router)
@@ -33,4 +31,4 @@ app.include_router(workspaces.router)
 
 @app.on_event("shutdown")
 async def shutdown():
-    await close_redis()
+    await close_store()
