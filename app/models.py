@@ -44,23 +44,42 @@ class LLMProxyResponse(BaseModel):
     usage: dict | None = None
 
 
+# ── LLM Configuration ────────────────────────────────────
+
+class LLMConfig(BaseModel):
+    provider: str = Field(..., description="anthropic, openai, openclaw, or custom")
+    upstream_url: str = Field(..., description="Base URL of the LLM API")
+    api_key: str = Field(..., min_length=1, description="API key for the upstream LLM")
+    default_model: str = Field("", description="Default model to use (e.g. claude-sonnet-4-20250514)")
+
+
+class LLMConfigResponse(BaseModel):
+    provider: str
+    upstream_url: str
+    default_model: str
+    configured: bool
+
+
 # ── Workspace / Tenant ───────────────────────────────────
 
 class WorkspaceCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     ppi_terms: list[str] = Field(default_factory=list, description="Custom proprietary terms to anonymize")
+    llm: LLMConfig | None = Field(None, description="LLM upstream configuration")
 
 
 class WorkspaceResponse(BaseModel):
     id: str
     name: str
     ppi_term_count: int
+    llm: LLMConfigResponse | None = None
     api_key: str | None = None  # only returned on creation
 
 
 class WorkspaceUpdate(BaseModel):
     name: str | None = None
     ppi_terms: list[str] | None = None
+    llm: LLMConfig | None = None
 
 
 # ── Health ───────────────────────────────────────────────

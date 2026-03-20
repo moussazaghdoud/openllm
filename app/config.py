@@ -14,10 +14,6 @@ class Settings(BaseSettings):
     # Optional external Presidio (if empty, built-in engine is used)
     presidio_external_url: str = ""
 
-    # LLM upstream
-    llm_upstream_url: str = ""
-    llm_upstream_api_key: str = ""
-
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

@@ -8,7 +8,6 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth import require_workspace
-from app.config import settings
 from app.engine.pipeline import PrivacyPipeline
 from app.models import (
     AnonymizeRequest,
@@ -19,6 +18,7 @@ from app.models import (
     LLMProxyResponse,
 )
 from app.storage import KVStore, get_store
+from app import workspace as ws_ops
 
 logger = logging.getLogger("securellm.routes.anonymize")
 
@@ -61,12 +61,24 @@ async def llm_proxy(
     workspace_id: str = Depends(require_workspace),
     store: KVStore = Depends(get_store),
 ):
-    """Privacy-first LLM proxy — anonymize -> LLM -> deanonymize."""
+    """Privacy-first LLM proxy — anonymize -> LLM -> deanonymize.
+
+    LLM upstream is configured per-workspace via /admin/workspaces/{id}/llm.
+    NO raw data ever reaches the LLM.
+    """
     if req.workspace_id != workspace_id:
         raise HTTPException(403, "Workspace ID mismatch")
 
-    if not settings.llm_upstream_url:
-        raise HTTPException(503, "LLM upstream not configured")
+    # Load per-workspace LLM config
+    llm_config = await ws_ops.get_llm_config(store, workspace_id)
+    if not llm_config:
+        raise HTTPException(503, "LLM not configured for this workspace. Use PUT /admin/workspaces/{id}/llm")
+
+    upstream_url = llm_config["upstream_url"].rstrip("/")
+    upstream_key = llm_config["api_key"]
+    model = req.model if req.model != "default" else llm_config.get("default_model", "")
+    if not model:
+        raise HTTPException(400, "No model specified and no default_model configured")
 
     pipeline = await PrivacyPipeline.for_workspace(store, workspace_id)
 
@@ -85,31 +97,57 @@ async def llm_proxy(
         anonymized_messages.append({**msg, "content": anon_text})
 
     # Step 2: Forward to upstream LLM
-    upstream_payload = {
-        "model": req.model,
-        "messages": anonymized_messages,
-        "max_tokens": req.max_tokens,
-        "temperature": req.temperature,
-    }
+    provider = llm_config.get("provider", "custom")
+
+    if provider == "anthropic":
+        # Anthropic uses /v1/messages with a different format
+        upstream_payload = {
+            "model": model,
+            "messages": anonymized_messages,
+            "max_tokens": req.max_tokens,
+        }
+        headers = {
+            "x-api-key": upstream_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        }
+        url = f"{upstream_url}/v1/messages"
+    else:
+        # OpenAI-compatible (openai, openclaw, custom)
+        upstream_payload = {
+            "model": model,
+            "messages": anonymized_messages,
+            "max_tokens": req.max_tokens,
+            "temperature": req.temperature,
+        }
+        headers = {
+            "Authorization": f"Bearer {upstream_key}",
+            "Content-Type": "application/json",
+        }
+        url = f"{upstream_url}/v1/chat/completions"
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(
-                f"{settings.llm_upstream_url.rstrip('/')}/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.llm_upstream_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=upstream_payload,
-            )
+            resp = await client.post(url, headers=headers, json=upstream_payload)
             resp.raise_for_status()
             llm_data = resp.json()
     except httpx.HTTPError as e:
         logger.error("LLM upstream error: %s", e)
         raise HTTPException(502, f"LLM upstream error: {e}")
 
-    # Step 3: Deanonymize response
-    choices = llm_data.get("choices", [])
+    # Step 3: Normalize response and deanonymize
+    if provider == "anthropic":
+        # Convert Anthropic response to OpenAI format
+        content = ""
+        for block in llm_data.get("content", []):
+            if block.get("type") == "text":
+                content += block["text"]
+        choices = [{"message": {"role": "assistant", "content": content}}]
+        usage = llm_data.get("usage")
+    else:
+        choices = llm_data.get("choices", [])
+        usage = llm_data.get("usage")
+
     for choice in choices:
         content = choice.get("message", {}).get("content", "")
         if content:
@@ -119,6 +157,6 @@ async def llm_proxy(
 
     return LLMProxyResponse(
         choices=choices,
-        model=llm_data.get("model", req.model),
-        usage=llm_data.get("usage"),
+        model=llm_data.get("model", model),
+        usage=usage,
     )
