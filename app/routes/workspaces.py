@@ -15,6 +15,23 @@ from app import workspace as ws_ops
 router = APIRouter(prefix="/admin/workspaces", tags=["admin"])
 
 
+@router.get("", response_model=list[WorkspaceResponse], dependencies=[Depends(require_admin)])
+async def list_workspaces(
+    store: KVStore = Depends(get_store),
+):
+    """List all workspaces."""
+    keys = await store.scan_iter("ws:*")
+    # Filter to workspace root keys only (exclude :ppi_terms, :llm)
+    ws_keys = [k for k in keys if k.count(":") == 1]
+    results = []
+    for key in ws_keys:
+        ws_id = key.split(":")[1]
+        ws = await ws_ops.get_workspace(store, ws_id)
+        if ws:
+            results.append(WorkspaceResponse(**ws))
+    return results
+
+
 @router.post("", response_model=WorkspaceResponse, dependencies=[Depends(require_admin)])
 async def create_workspace(
     body: WorkspaceCreate,
