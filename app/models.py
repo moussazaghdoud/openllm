@@ -82,6 +82,40 @@ class WorkspaceUpdate(BaseModel):
     llm: LLMConfig | None = None
 
 
+# ── Portal (Customer-facing) ─────────────────────────────
+
+class PortalWorkspaceInfo(BaseModel):
+    id: str
+    name: str
+    ppi_term_count: int
+    llm: LLMConfigResponse | None = None
+    stats: dict = Field(default_factory=lambda: {"anon_count": 0, "last_used": None})
+
+
+class PPITermsResponse(BaseModel):
+    terms: list[str]
+
+
+class PPITermsUpdate(BaseModel):
+    terms: list[str]
+
+
+class SubKeyCreate(BaseModel):
+    label: str = Field(..., min_length=1, max_length=64)
+
+
+class SubKeyResponse(BaseModel):
+    label: str
+    prefix: str
+    created_at: str
+
+
+class SubKeyCreated(BaseModel):
+    label: str
+    api_key: str
+    created_at: str
+
+
 # ── Health ───────────────────────────────────────────────
 
 class HealthResponse(BaseModel):

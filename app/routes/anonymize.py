@@ -37,6 +37,8 @@ async def anonymize(
     pipeline = await PrivacyPipeline.for_workspace(store, workspace_id)
     anonymized_text, mapping_id = await pipeline.anonymize(req.text)
 
+    await ws_ops.increment_stats(store, workspace_id)
+
     return AnonymizeResponse(anonymized_text=anonymized_text, mapping_id=mapping_id)
 
 
