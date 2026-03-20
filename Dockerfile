@@ -6,8 +6,8 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir .
 
-# Download spaCy model for Presidio NER
-RUN python -m spacy download en_core_web_lg
+# Download spaCy model for Presidio NER (~12MB, fast)
+RUN python -m spacy download en_core_web_sm
 
 # Copy application code
 COPY app/ ./app/

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import httpx
 from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
 
 ENTITY_TYPES = [
@@ -26,7 +27,16 @@ _anonymizer: AnonymizerEngine | None = None
 def _get_engines() -> tuple[AnalyzerEngine, AnonymizerEngine]:
     global _analyzer, _anonymizer
     if _analyzer is None:
-        _analyzer = AnalyzerEngine()
+        # Use whichever spaCy model is installed (sm, md, or lg)
+        import spacy.util
+        available = [m for m in ["en_core_web_lg", "en_core_web_md", "en_core_web_sm"]
+                     if spacy.util.is_package(m)]
+        model_name = available[0] if available else "en_core_web_sm"
+        provider = NlpEngineProvider(nlp_configuration={
+            "nlp_engine_name": "spacy",
+            "models": [{"lang_code": "en", "model_name": model_name}],
+        })
+        _analyzer = AnalyzerEngine(nlp_engine=provider.create_engine())
         _anonymizer = AnonymizerEngine()
     return _analyzer, _anonymizer  # type: ignore[return-value]
 
