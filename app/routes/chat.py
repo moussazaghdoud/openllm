@@ -251,7 +251,7 @@ function renderFileBar() {
       <span class="file-icon">${fileIcon(f.filename)}</span>
       <span class="file-name">${esc(f.filename)}</span>
       <span class="file-size">${formatSize(f.size)}${f.char_count?' / '+f.char_count+' chars':''}</span>
-      ${f.uploading?'':`<button class="file-remove" onclick="removeFile(${i})">&times;</button>`}
+      ${f.uploading?'':`<button class="file-remove" onclick="translateFile(${i})" title="Translate" style="color:var(--accent2)">&#127760;</button><button class="file-remove" onclick="removeFile(${i})" title="Remove">&times;</button>`}
     </div>
   `).join('');
 }
@@ -259,6 +259,33 @@ function renderFileBar() {
 function removeFile(idx) {
   attachedFiles.splice(idx,1);
   renderFileBar();
+}
+
+// Translation
+async function translateFile(idx) {
+  const f = attachedFiles[idx];
+  if (!f || !f.file_id) return;
+  const lang = prompt('Translate to which language?', 'French');
+  if (!lang) return;
+
+  addMessage('system', 'Translating '+f.filename+' to '+lang+'...');
+
+  try {
+    const r = await fetch(B+'/v1/translate', {
+      method:'POST', headers:hdr(),
+      body:JSON.stringify({file_id:f.file_id, language:lang})
+    });
+    const d = await r.json();
+    if (!r.ok) { addMessage('system','Translation error: '+(d.detail||'failed')); return; }
+
+    // Show download link
+    const el = document.createElement('div');
+    el.className = 'msg-file';
+    el.innerHTML = `<span class="fi">&#128196;</span><div class="fd"><span class="fn">${esc(d.filename)}</span><span class="fs">${d.paragraphs_translated} paragraphs translated</span></div><a href="${B}${d.download_url}" target="_blank" style="color:var(--accent2);text-decoration:none;font-size:13px;margin-left:8px">Download</a>`;
+    document.getElementById('messages').appendChild(el);
+    scrollBottom();
+    toast('Translation complete!','success');
+  } catch(e) { addMessage('system','Error: '+e.message); }
 }
 
 function addFileMessage(name, size, chars) {
