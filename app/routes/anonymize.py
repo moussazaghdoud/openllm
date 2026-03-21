@@ -84,9 +84,29 @@ async def llm_proxy(
 
     pipeline = await PrivacyPipeline.for_workspace(store, workspace_id)
 
+    # Step 0: Load attached file contexts (already anonymized at upload time)
+    file_context = ""
+    file_mapping_ids: list[str] = []
+    for fid in req.file_ids:
+        if not fid.startswith(f"file:{workspace_id}:"):
+            continue
+        raw = await store.get(fid)
+        if raw:
+            import json as _json
+            fdata = _json.loads(raw)
+            file_context += f"\n\n--- Document: {fdata['filename']} ---\n{fdata['anonymized_text']}\n"
+            file_mapping_ids.append(fdata["mapping_id"])
+
     # Step 1: Anonymize user/system messages
     anonymized_messages = []
-    mapping_ids: list[str] = []
+    mapping_ids: list[str] = list(file_mapping_ids)
+
+    # Inject file context as a system message if files are attached
+    if file_context:
+        anonymized_messages.append({
+            "role": "system",
+            "content": f"The user has attached the following documents. Use them to answer questions.\n{file_context}"
+        })
 
     for msg in req.messages:
         content = msg.get("content", "")

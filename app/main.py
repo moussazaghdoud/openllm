@@ -11,7 +11,7 @@ import logging
 from fastapi import FastAPI
 
 from app.storage import close_store
-from app.routes import anonymize, chat, dashboard, health, portal, workspaces
+from app.routes import anonymize, chat, dashboard, files, health, portal, workspaces
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,6 +30,7 @@ app.include_router(anonymize.router)
 app.include_router(workspaces.router)
 app.include_router(portal.router)
 app.include_router(chat.router)
+app.include_router(files.router)
 
 
 @app.on_event("shutdown")

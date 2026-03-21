@@ -36,6 +36,7 @@ class LLMProxyRequest(BaseModel):
     max_tokens: int = 4096
     temperature: float = 0.7
     stream: bool = False
+    file_ids: list[str] = Field(default_factory=list, description="Attached file IDs to include as context")
 
 
 class LLMProxyResponse(BaseModel):
