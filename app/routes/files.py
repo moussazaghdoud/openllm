@@ -19,7 +19,7 @@ logger = logging.getLogger("securellm.files")
 router = APIRouter(prefix="/v1", tags=["files"])
 
 # Max file size: 10MB
-MAX_FILE_SIZE = 10 * 1024 * 1024
+MAX_FILE_SIZE = 20 * 1024 * 1024
 # File context TTL: 24 hours
 FILE_TTL = 86400
 
@@ -116,7 +116,7 @@ async def upload_file(
     """
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(413, "File too large (max 10MB)")
+        raise HTTPException(413, "File too large (max 20MB)")
 
     if not file.filename:
         raise HTTPException(400, "Filename required")

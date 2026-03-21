@@ -199,7 +199,7 @@ document.getElementById('authKey').addEventListener('keydown', e => { if(e.key==
 // File upload
 async function handleFiles(fileList) {
   for (const file of fileList) {
-    if (file.size > 10*1024*1024) { toast(file.name+' too large (max 10MB)','error'); continue; }
+    if (file.size > 20*1024*1024) { toast(file.name+' too large (max 20MB)','error'); continue; }
 
     // Add chip in uploading state
     const tempId = 'temp_'+Date.now()+'_'+Math.random();
