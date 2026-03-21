@@ -138,13 +138,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sa
   <div class="input-area">
     <div class="input-row">
       <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Attach file">&#128206;</button>
-      <input type="file" id="fileInput" style="display:none" accept=".txt,.md,.csv,.json,.xml,.pdf,.docx,.xlsx,.py,.js,.ts,.sql,.html,.log,.yaml,.yml" multiple onchange="handleFiles(this.files)" />
+      <input type="file" id="fileInput" style="display:none" accept=".txt,.md,.csv,.json,.xml,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.py,.js,.ts,.sql,.html,.log,.yaml,.yml" multiple onchange="handleFiles(this.files)" />
       <textarea id="chatInput" placeholder="Type your message..." rows="1"></textarea>
       <button class="send-btn" id="sendBtn" onclick="send()">&#9654;</button>
     </div>
     <div class="input-footer">
       <label class="toggle"><input type="checkbox" id="showPrivacy" onchange="togglePrivacy()"> Show what AI sees</label>
-      <span style="color:var(--text2)">PDF, DOCX, XLSX, TXT, CSV, JSON + more</span>
+      <span style="color:var(--text2)">PDF, DOCX, PPTX, XLSX, TXT, CSV, JSON + more</span>
     </div>
   </div>
 </div>
@@ -163,7 +163,7 @@ function esc(s) { const d=document.createElement('div'); d.textContent=s; return
 
 function fileIcon(name) {
   const ext = name.split('.').pop().toLowerCase();
-  const icons = {pdf:'&#128196;',docx:'&#128196;',doc:'&#128196;',xlsx:'&#128202;',xls:'&#128202;',csv:'&#128202;',json:'&#128203;',xml:'&#128203;',txt:'&#128196;',md:'&#128196;',py:'&#128187;',js:'&#128187;',ts:'&#128187;',sql:'&#128187;',html:'&#127760;'};
+  const icons = {pdf:'&#128196;',docx:'&#128196;',doc:'&#128196;',pptx:'&#128202;',ppt:'&#128202;',xlsx:'&#128202;',xls:'&#128202;',csv:'&#128202;',json:'&#128203;',xml:'&#128203;',txt:'&#128196;',md:'&#128196;',py:'&#128187;',js:'&#128187;',ts:'&#128187;',sql:'&#128187;',html:'&#127760;'};
   return icons[ext] || '&#128196;';
 }
 

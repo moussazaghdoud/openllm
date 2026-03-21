@@ -61,6 +61,23 @@ def extract_text_xlsx(content: bytes) -> str:
     return "\n".join(texts)
 
 
+def extract_text_pptx(content: bytes) -> str:
+    """Extract text from .pptx files."""
+    import zipfile
+    import re
+    zf = zipfile.ZipFile(io.BytesIO(content))
+    texts = []
+    slide_files = sorted([n for n in zf.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml")])
+    for slide in slide_files:
+        xml = zf.read(slide).decode("utf-8", errors="replace")
+        # Extract text from <a:t> tags
+        for match in re.finditer(r"<a:t>(.*?)</a:t>", xml):
+            t = match.group(1).strip()
+            if t:
+                texts.append(t)
+    return "\n".join(texts)
+
+
 TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".log", ".html", ".htm", ".js", ".py", ".ts", ".sql", ".ini", ".cfg", ".env.example"}
 
 
@@ -69,9 +86,11 @@ def extract_text(content: bytes, filename: str) -> str:
     name = filename.lower()
     if name.endswith(".docx"):
         return extract_text_docx(content)
+    elif name.endswith(".pptx") or name.endswith(".ppt"):
+        return extract_text_pptx(content)
     elif name.endswith(".pdf"):
         return extract_text_pdf(content)
-    elif name.endswith(".xlsx"):
+    elif name.endswith(".xlsx") or name.endswith(".xls"):
         return extract_text_xlsx(content)
     else:
         # Try as text for known extensions or small files
