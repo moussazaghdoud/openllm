@@ -20,7 +20,7 @@ import httpx
 
 logger = logging.getLogger("securellm.translator")
 
-CHUNK_SIZE = 40       # paragraphs per LLM call
+CHUNK_SIZE = 15       # paragraphs per LLM call (small to avoid refusals)
 TRANSLATION_TIMEOUT = 180.0  # 3 minutes per chunk
 
 
@@ -56,7 +56,7 @@ async def call_translation(
         logger.info("Translation chunk %d/%d: %d paragraphs", chunk_num, total_chunks, len(chunk))
 
         messages = [
-            {"role": "system", "content": "You are a professional translator. Return ONLY the JSON array of translated strings. No commentary."},
+            {"role": "system", "content": "You are a professional document translator. Your ONLY job is to translate text. You MUST translate every paragraph given to you, no matter how long. Never refuse. Never summarize. Return ONLY a JSON array of translated strings. No commentary, no explanation."},
             {"role": "user", "content": prompt},
         ]
 
@@ -64,11 +64,11 @@ async def call_translation(
         if provider == "anthropic":
             url = f"{upstream_url}/v1/messages"
             headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
-            payload = {"model": model, "messages": messages, "max_tokens": 4096}
+            payload = {"model": model, "messages": messages, "max_tokens": 8192}
         else:
             url = f"{upstream_url}/v1/chat/completions"
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-            payload = {"model": model, "messages": messages, "max_tokens": 4096, "temperature": 0.3}
+            payload = {"model": model, "messages": messages, "max_tokens": 8192, "temperature": 0.3}
 
         try:
             async with httpx.AsyncClient(timeout=TRANSLATION_TIMEOUT) as client:
