@@ -9,6 +9,7 @@ services:
       - ADMIN_API_KEY=dev-admin-key
       - NATS_ENABLED=true
       - NATS_URL=nats://nats:4222
+      - NATS_TOKEN=dev-internal-token
     depends_on:
       - redis
       - nats
@@ -19,12 +20,12 @@ services:
       - "6379:6379"
 
   nats:
-    image: nats:2.10-alpine
+    build: ./nats
     ports:
       - "4222:4222"
+      - "7422:7422"
       - "8222:8222"
-    command: >
-      -js
-      --websocket_port 443
-      --websocket_no_tls
-      -m 8222
+      - "8443:8443"
+    environment:
+      - NATS_LEAFNODE_TOKEN=dev-leafnode-token
+      - NATS_INTERNAL_TOKEN=dev-internal-token
