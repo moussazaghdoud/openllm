@@ -121,7 +121,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sa
   <div class="auth-box">
     <h2>Secure Chat</h2>
     <p>All your messages are anonymized before reaching the AI.<br>Attach documents for privacy-safe analysis.</p>
-    <input type="password" id="authKey" placeholder="Enter your API key (slm_...)" />
+    <input type="password" id="authKey" value="slm_yTphNO_1ep7Wk1EW7j-JG2J3kcElXHw3CUCwrHpoD-Q" placeholder="Enter your API key (slm_...)" />
     <button class="btn btn-primary" onclick="login()">Start Chatting</button>
   </div>
 </div>
