@@ -20,7 +20,7 @@ CHAT_HTML = r"""<!DOCTYPE html>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-:root {
+:root, [data-theme="dark"] {
   --bg: #0c0d12; --surface: #16181f; --surface2: #1e2029; --surface3: #262833;
   --border: #2a2d3a; --border-light: #353849;
   --text: #eef0f6; --text2: #9299b0; --text3: #6b7190;
@@ -32,6 +32,17 @@ CHAT_HTML = r"""<!DOCTYPE html>
   --radius: 16px; --radius-sm: 10px; --radius-xs: 6px;
   --shadow: 0 4px 24px rgba(0,0,0,.3);
   --transition: all .25s cubic-bezier(.4,0,.2,1);
+}
+[data-theme="light"] {
+  --bg: #f5f5f7; --surface: #ffffff; --surface2: #f0f0f3; --surface3: #e8e8ed;
+  --border: #d8d8e0; --border-light: #c8c8d2;
+  --text: #1a1a2e; --text2: #5a5a72; --text3: #8a8aa0;
+  --accent: #6c5ce7; --accent2: #7c6ef0; --accent-glow: rgba(124,110,240,.1);
+  --green: #059669; --green-bg: rgba(5,150,105,.06); --green-border: rgba(5,150,105,.15);
+  --red: #dc2626; --red-bg: rgba(220,38,38,.05); --red-border: rgba(220,38,38,.12);
+  --orange: #d97706; --orange-bg: rgba(217,119,6,.06);
+  --blue: #2563eb; --blue-bg: rgba(37,99,235,.06);
+  --shadow: 0 4px 24px rgba(0,0,0,.08);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
@@ -107,7 +118,7 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
 .msg { max-width:72%; animation:msgIn .3s ease; }
 @keyframes msgIn { from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)} }
 .msg-user { align-self:flex-end; }
-.msg-user .bubble { background:linear-gradient(135deg,var(--accent),#8b7cf0); color:#fff; border-radius:var(--radius) var(--radius) 4px var(--radius); padding:14px 18px; font-size:14px; line-height:1.6; box-shadow:0 2px 12px rgba(124,110,240,.2); }
+.msg-user .bubble { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-radius:var(--radius) var(--radius) 4px var(--radius); padding:14px 18px; font-size:14px; line-height:1.6; box-shadow:0 2px 12px rgba(124,110,240,.2); }
 .msg-assistant { align-self:flex-start; }
 .msg-assistant .bubble { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius) var(--radius) var(--radius) 4px; padding:14px 18px; font-size:14px; line-height:1.7; }
 .msg-assistant .bubble pre { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-xs); padding:12px; margin:10px 0; overflow-x:auto; font-size:13px; }
@@ -184,6 +195,7 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
   </div>
   <div class="header-meta">
     <div class="pill pill-green" id="privacyPill" style="display:none"><span class="pill-dot"></span> Privacy Active</div>
+    <button onclick="toggleTheme()" id="themeBtn" style="background:none;border:1px solid var(--border);border-radius:8px;width:36px;height:36px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:var(--transition);color:var(--text2)" title="Toggle light/dark mode">&#127769;</button>
     <a href="/portal" style="color:var(--text3);font-size:12px;text-decoration:none;transition:var(--transition)" onmouseover="this.style.color='var(--accent2)'" onmouseout="this.style.color='var(--text3)'">Portal</a>
   </div>
 </div>
@@ -450,6 +462,24 @@ const ci=document.getElementById('chatInput');
 ci.addEventListener('input',function(){autoResize(this)});
 ci.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
 function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,160)+'px'}
+
+// ── Theme Toggle ──
+function toggleTheme(){
+  const html=document.documentElement;
+  const current=html.getAttribute('data-theme')||'dark';
+  const next=current==='dark'?'light':'dark';
+  html.setAttribute('data-theme',next);
+  document.getElementById('themeBtn').innerHTML=next==='dark'?'&#127769;':'&#9728;';
+  localStorage.setItem('securellm-theme',next);
+}
+// Restore saved theme
+(function(){
+  const saved=localStorage.getItem('securellm-theme');
+  if(saved){
+    document.documentElement.setAttribute('data-theme',saved);
+    if(saved==='light')document.getElementById('themeBtn').innerHTML='&#9728;';
+  }
+})();
 </script>
 </body>
 </html>
