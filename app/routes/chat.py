@@ -363,7 +363,7 @@ function renderFiles(){
         <span class="fc-icon">${fIcon(f.filename)}</span>
         <span class="fc-name">${esc(f.filename)}</span>
         <span class="fc-chars">${f.char_count}</span>
-        <button class="fc-del" onclick="event.preventDefault();removeFile(${i})" title="Remove">&#10005;</button>`;
+        <button class="fc-del" onclick="event.preventDefault();confirmRemove(${i})" title="Remove">&#10005;</button>`;
       zb.appendChild(row);
     } else {
       // Zone A: compact row with inline progress
@@ -408,6 +408,10 @@ function updateContextBar(){
   document.getElementById('suggestions').style.display='flex';
 }
 
+function confirmRemove(i){
+  const f=attachedFiles[i];if(!f)return;
+  if(confirm('Remove "'+f.filename+'" ?')){removeFile(i)}
+}
 function removeFile(i){attachedFiles.splice(i,1);renderFiles();if(getSelectedFiles().length===0)document.getElementById('suggestions').style.display='none'}
 
 // ── Translation ──
