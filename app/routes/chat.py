@@ -95,6 +95,23 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
 .fc-btn:hover { border-color:var(--accent); color:var(--accent2); }
 .fc-btn-accent { background:var(--accent-glow); border-color:rgba(124,110,240,.3); color:var(--accent2); }
 
+/* Zone B compact list */
+.file-check { display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:var(--radius-xs); cursor:pointer; transition:var(--transition); border:1px solid transparent; margin-bottom:2px; }
+.file-check:hover { background:var(--surface2); }
+.file-check.selected { background:var(--green-bg); border-color:var(--green-border); }
+.file-check input[type="checkbox"] { accent-color:var(--green); width:15px; height:15px; cursor:pointer; flex-shrink:0; }
+.file-check .fc-icon { font-size:16px; flex-shrink:0; }
+.file-check .fc-name { font-size:12px; font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.file-check .fc-chars { font-size:10px; color:var(--text3); flex-shrink:0; }
+
+/* Context bar in chat */
+.context-bar { background:var(--surface); border-bottom:1px solid var(--border); padding:10px 32px; display:none; flex-shrink:0; animation:slideDown .2s ease; }
+.context-bar.active { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+@keyframes slideDown { from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)} }
+.context-bar .cb-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--green); flex-shrink:0; }
+.context-chip { display:inline-flex; align-items:center; gap:5px; background:var(--green-bg); border:1px solid var(--green-border); border-radius:16px; padding:3px 10px; font-size:11px; color:var(--green); }
+.context-chip .cc-icon { font-size:12px; }
+
 /* Anonymization progress bar */
 .anon-progress { height:3px; background:var(--border); border-radius:2px; margin-top:8px; overflow:hidden; }
 .anon-progress .bar { height:100%; border-radius:2px; transition:width .6s ease; }
@@ -233,14 +250,19 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
 
   <!-- Chat Area -->
   <div class="chat-area">
+    <div class="context-bar" id="contextBar">
+      <span class="cb-label">Working with:</span>
+      <div id="contextChips"></div>
+    </div>
     <div class="messages" id="messages">
       <div class="msg msg-system"><div class="bubble">All messages and documents are anonymized through a 2-wave privacy pipeline before reaching the AI.</div></div>
     </div>
     <div class="suggestions" id="suggestions" style="display:none">
-      <div class="suggestion" onclick="sendSuggestion('Summarize this document')">&#128196; Summarize</div>
+      <div class="suggestion" onclick="sendSuggestion('Summarize the selected documents')">&#128196; Summarize</div>
       <div class="suggestion" onclick="sendSuggestion('Extract key insights and action items')">&#128161; Extract insights</div>
       <div class="suggestion" onclick="sendSuggestion('List all people and organizations mentioned')">&#128101; Find entities</div>
-      <div class="suggestion" onclick="translateFirst()">&#127760; Translate</div>
+      <div class="suggestion" onclick="translateSelected()">&#127760; Translate</div>
+      <div class="suggestion" onclick="sendSuggestion('Compare the selected documents')">&#128260; Compare</div>
     </div>
     <div class="privacy-panel" id="privacyPanel">
       <div class="privacy-header"><span class="eye">&#128065;</span> What AI sees (anonymized)</div>
@@ -312,8 +334,8 @@ async function handleFiles(fileList){
       renderFiles();
       await sleep(600);
 
-      // Ready
-      attachedFiles[idx]={...attachedFiles[idx],file_id:data.file_id,char_count:data.char_count,status:'ready'};
+      // Ready — auto-select
+      attachedFiles[idx]={...attachedFiles[idx],file_id:data.file_id,char_count:data.char_count,status:'ready',selected:true};
       renderFiles();
       document.getElementById('suggestions').style.display='flex';
       toast('Secured: '+file.name,'success');
@@ -330,21 +352,20 @@ function renderFiles(){
   za.innerHTML=''; zb.innerHTML='';
 
   attachedFiles.forEach((f,i)=>{
-    const card=document.createElement('div');
-    card.className='file-card';
-
     if(f.status==='ready'){
-      card.className+=' zone-b';
-      card.innerHTML=`
-        <div class="fc-header"><span class="fc-icon">${fIcon(f.filename)}</span><span class="fc-name">${esc(f.filename)}</span></div>
-        <div class="fc-status" style="color:var(--green)">&#10003; Secured &middot; ${f.char_count} chars extracted</div>
-        <div class="fc-actions">
-          <button class="fc-btn fc-btn-accent" onclick="translateFile(${i})">&#127760; Translate</button>
-          <button class="fc-btn" onclick="removeFile(${i})">&#10005;</button>
-        </div>`;
-      zb.appendChild(card);
+      // Zone B: compact checkbox list
+      const row=document.createElement('label');
+      row.className='file-check'+(f.selected?' selected':'');
+      row.innerHTML=`
+        <input type="checkbox" ${f.selected?'checked':''} onchange="toggleSelect(${i},this.checked)"/>
+        <span class="fc-icon">${fIcon(f.filename)}</span>
+        <span class="fc-name">${esc(f.filename)}</span>
+        <span class="fc-chars">${f.char_count}</span>`;
+      zb.appendChild(row);
     } else {
-      card.className+=' zone-a';
+      // Zone A: progress card
+      const card=document.createElement('div');
+      card.className='file-card zone-a';
       const labels={uploading:'Uploading...',wave1:'Wave 1: Removing personal data...',wave2:'Wave 2: Protecting business context...'};
       const colors={uploading:'var(--text3)',wave1:'var(--blue)',wave2:'var(--orange)'};
       const progress={uploading:20,wave1:50,wave2:85};
@@ -356,15 +377,41 @@ function renderFiles(){
       za.appendChild(card);
     }
   });
+
+  updateContextBar();
 }
 
-function removeFile(i){attachedFiles.splice(i,1);renderFiles();if(attachedFiles.length===0)document.getElementById('suggestions').style.display='none'}
+function toggleSelect(i, checked){
+  attachedFiles[i].selected=checked;
+  renderFiles();
+}
+
+function getSelectedFiles(){
+  return attachedFiles.filter(f=>f.selected&&f.file_id);
+}
+
+function updateContextBar(){
+  const selected=getSelectedFiles();
+  const bar=document.getElementById('contextBar');
+  const chips=document.getElementById('contextChips');
+
+  if(selected.length===0){
+    bar.classList.remove('active');
+    return;
+  }
+  bar.classList.add('active');
+  chips.innerHTML=selected.map(f=>`<span class="context-chip"><span class="cc-icon">${fIcon(f.filename)}</span>${esc(f.filename)}</span>`).join('');
+
+  // Show suggestions when files selected
+  document.getElementById('suggestions').style.display='flex';
+}
+
+function removeFile(i){attachedFiles.splice(i,1);renderFiles();if(getSelectedFiles().length===0)document.getElementById('suggestions').style.display='none'}
 
 // ── Translation ──
-async function translateFile(i){
+async function translateFile(i,lang){
   const f=attachedFiles[i]; if(!f||!f.file_id)return;
-  const lang=prompt('Translate to which language?','French');
-  if(!lang)return;
+  if(!lang){lang=prompt('Translate to which language?','French');if(!lang)return;}
   addMsg('system','Translating '+f.filename+' to '+lang+'...');
   try{
     const r=await fetch(B+'/v1/translate',{method:'POST',headers:hdr(),body:JSON.stringify({file_id:f.file_id,language:lang})});
@@ -375,10 +422,12 @@ async function translateFile(i){
   }catch(e){addMsg('system','Error: '+e.message)}
 }
 
-function translateFirst(){
-  const f=attachedFiles.find(f=>f.status==='ready');
-  if(f){const i=attachedFiles.indexOf(f);translateFile(i)}
-  else toast('Upload a file first','error');
+function translateSelected(){
+  const selected=getSelectedFiles();
+  if(selected.length===0){toast('Select files first','error');return}
+  const lang=prompt('Translate to which language?','French');
+  if(!lang)return;
+  selected.forEach(f=>{const i=attachedFiles.indexOf(f);translateFile(i,lang)});
 }
 
 // ── Chat ──
@@ -400,7 +449,7 @@ async function send(){
   scrollEnd();
 
   history.push({role:'user',content:text});
-  const file_ids=attachedFiles.filter(f=>f.file_id).map(f=>f.file_id);
+  const file_ids=getSelectedFiles().map(f=>f.file_id);
 
   try{
     // Privacy panel
