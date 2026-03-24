@@ -103,6 +103,9 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
 .file-check .fc-icon { font-size:16px; flex-shrink:0; }
 .file-check .fc-name { font-size:12px; font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .file-check .fc-chars { font-size:10px; color:var(--text3); flex-shrink:0; }
+.file-check .fc-del { opacity:0; background:none; border:none; color:var(--text3); cursor:pointer; font-size:14px; padding:0 2px; flex-shrink:0; transition:var(--transition); }
+.file-check:hover .fc-del { opacity:1; }
+.file-check .fc-del:hover { color:var(--red); }
 
 /* Context bar in chat */
 .context-bar { background:var(--surface); border-bottom:1px solid var(--border); padding:10px 32px; display:none; flex-shrink:0; animation:slideDown .2s ease; }
@@ -120,12 +123,12 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
 
 /* Upload area */
 .upload-area { padding:12px; border-top:1px solid var(--border); }
-.drop-zone { border:2px dashed var(--border); border-radius:var(--radius-sm); padding:24px 16px; text-align:center; cursor:pointer; transition:var(--transition); }
+.drop-zone { border:2px dashed var(--border); border-radius:var(--radius-sm); padding:14px 12px; text-align:center; cursor:pointer; transition:var(--transition); }
 .drop-zone:hover { border-color:var(--accent); background:var(--accent-glow); }
 .drop-zone.dragover { border-color:var(--accent); background:var(--accent-glow); transform:scale(1.01); }
-.drop-zone .dz-icon { font-size:28px; margin-bottom:6px; }
-.drop-zone .dz-text { font-size:13px; color:var(--text2); }
-.drop-zone .dz-hint { font-size:11px; color:var(--text3); margin-top:4px; }
+.drop-zone .dz-icon { font-size:20px; display:inline; margin-right:6px; }
+.drop-zone .dz-text { font-size:12px; color:var(--text2); display:inline; }
+.drop-zone .dz-hint { font-size:10px; color:var(--text3); margin-top:2px; }
 
 /* ── Chat Area (Zone B) ────────────────── */
 .chat-area { flex:1; display:flex; flex-direction:column; background:var(--bg); }
@@ -240,8 +243,7 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
     <div class="file-list" id="zoneBFiles"></div>
     <div class="upload-area">
       <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-        <div class="dz-icon">&#128206;</div>
-        <div class="dz-text">Drop files or click to upload</div>
+        <span class="dz-icon">&#128206;</span><span class="dz-text">Drop or click to upload</span>
         <div class="dz-hint">PDF, DOCX, PPTX, XLSX, TXT, CSV</div>
       </div>
       <input type="file" id="fileInput" style="display:none" accept=".txt,.md,.csv,.json,.xml,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.py,.js,.ts,.sql,.html,.log,.yaml,.yml" multiple onchange="handleFiles(this.files)" />
@@ -360,7 +362,8 @@ function renderFiles(){
         <input type="checkbox" ${f.selected?'checked':''} onchange="toggleSelect(${i},this.checked)"/>
         <span class="fc-icon">${fIcon(f.filename)}</span>
         <span class="fc-name">${esc(f.filename)}</span>
-        <span class="fc-chars">${f.char_count}</span>`;
+        <span class="fc-chars">${f.char_count}</span>
+        <button class="fc-del" onclick="event.preventDefault();removeFile(${i})" title="Remove">&#10005;</button>`;
       zb.appendChild(row);
     } else {
       // Zone A: compact row with inline progress
