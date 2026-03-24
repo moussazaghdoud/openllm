@@ -7,10 +7,24 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - API_SECRET_KEY=dev-secret-key
       - ADMIN_API_KEY=dev-admin-key
+      - NATS_ENABLED=true
+      - NATS_URL=nats://nats:4222
     depends_on:
       - redis
+      - nats
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+
+  nats:
+    image: nats:2.10-alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: >
+      -js
+      --websocket_port 443
+      --websocket_no_tls
+      -m 8222

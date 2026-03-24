@@ -1,11 +1,17 @@
-"""Privacy Gateway endpoints — anonymize / deanonymize / LLM proxy."""
+"""Privacy Gateway endpoints — anonymize / deanonymize / LLM proxy.
+
+Requests are routed based on workspace deployment_mode:
+- 'cloud': processed locally on Railway (default)
+- 'onprem': forwarded via NATS to the customer's on-premise engine
+"""
 
 from __future__ import annotations
 
+import json
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.auth import require_workspace
 from app.engine.pipeline import PrivacyPipeline
@@ -19,20 +25,47 @@ from app.models import (
 )
 from app.storage import KVStore, get_store
 from app import workspace as ws_ops
+from app import nats_router
 
 logger = logging.getLogger("securellm.routes.anonymize")
 
 router = APIRouter(prefix="/v1", tags=["privacy-gateway"])
 
 
+async def _forward_to_onprem(
+    workspace_id: str, request: Request, body: str,
+) -> dict:
+    """Forward a request to the on-premise engine via NATS."""
+    headers = dict(request.headers)
+    response = await nats_router.forward_request(
+        workspace_id=workspace_id,
+        method=request.method,
+        path=request.url.path,
+        headers=headers,
+        body=body,
+    )
+    return response
+
+
 @router.post("/anonymize", response_model=AnonymizeResponse)
 async def anonymize(
     req: AnonymizeRequest,
+    request: Request,
     workspace_id: str = Depends(require_workspace),
     store: KVStore = Depends(get_store),
 ):
     if req.workspace_id != workspace_id:
         raise HTTPException(403, "Workspace ID mismatch")
+
+    # Route to on-premise engine if workspace is configured for it
+    mode = await ws_ops.get_deployment_mode(store, workspace_id)
+    if mode == "onprem":
+        body = req.model_dump_json()
+        resp = await _forward_to_onprem(workspace_id, request, body)
+        if resp["status"] != 200:
+            raise HTTPException(resp["status"], json.loads(resp["body"]))
+        data = json.loads(resp["body"])
+        return AnonymizeResponse(**data)
 
     pipeline = await PrivacyPipeline.for_workspace(store, workspace_id)
     anonymized_text, mapping_id = await pipeline.anonymize(req.text)
@@ -45,11 +78,21 @@ async def anonymize(
 @router.post("/deanonymize", response_model=DeanonymizeResponse)
 async def deanonymize(
     req: DeanonymizeRequest,
+    request: Request,
     workspace_id: str = Depends(require_workspace),
     store: KVStore = Depends(get_store),
 ):
     if not req.mapping_id.startswith(f"map:{workspace_id}:"):
         raise HTTPException(403, "Mapping does not belong to this workspace")
+
+    mode = await ws_ops.get_deployment_mode(store, workspace_id)
+    if mode == "onprem":
+        body = req.model_dump_json()
+        resp = await _forward_to_onprem(workspace_id, request, body)
+        if resp["status"] != 200:
+            raise HTTPException(resp["status"], json.loads(resp["body"]))
+        data = json.loads(resp["body"])
+        return DeanonymizeResponse(**data)
 
     pipeline = await PrivacyPipeline.for_workspace(store, workspace_id)
     text = await pipeline.deanonymize(req.text, req.mapping_id)
@@ -60,6 +103,7 @@ async def deanonymize(
 @router.post("/chat/completions", response_model=LLMProxyResponse)
 async def llm_proxy(
     req: LLMProxyRequest,
+    request: Request,
     workspace_id: str = Depends(require_workspace),
     store: KVStore = Depends(get_store),
 ):
@@ -67,9 +111,23 @@ async def llm_proxy(
 
     LLM upstream is configured per-workspace via /admin/workspaces/{id}/llm.
     NO raw data ever reaches the LLM.
+
+    If workspace deployment_mode is 'onprem', the entire request is forwarded
+    to the on-premise engine via NATS tunnel. The on-premise engine handles
+    anonymization, LLM call, and deanonymization locally.
     """
     if req.workspace_id != workspace_id:
         raise HTTPException(403, "Workspace ID mismatch")
+
+    # Route to on-premise engine if configured
+    mode = await ws_ops.get_deployment_mode(store, workspace_id)
+    if mode == "onprem":
+        body = req.model_dump_json()
+        resp = await _forward_to_onprem(workspace_id, request, body)
+        if resp["status"] != 200:
+            raise HTTPException(resp["status"], json.loads(resp["body"]))
+        data = json.loads(resp["body"])
+        return LLMProxyResponse(**data)
 
     # Load per-workspace LLM config
     llm_config = await ws_ops.get_llm_config(store, workspace_id)

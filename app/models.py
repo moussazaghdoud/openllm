@@ -67,6 +67,7 @@ class WorkspaceCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     ppi_terms: list[str] = Field(default_factory=list, description="Custom proprietary terms to anonymize")
     llm: LLMConfig | None = Field(None, description="LLM upstream configuration")
+    deployment_mode: str = Field("cloud", description="'cloud' (process on Railway) or 'onprem' (route via NATS tunnel)")
 
 
 class WorkspaceResponse(BaseModel):
@@ -74,6 +75,7 @@ class WorkspaceResponse(BaseModel):
     name: str
     ppi_term_count: int
     llm: LLMConfigResponse | None = None
+    deployment_mode: str = "cloud"
     api_key: str | None = None  # only returned on creation
 
 
@@ -81,6 +83,7 @@ class WorkspaceUpdate(BaseModel):
     name: str | None = None
     ppi_terms: list[str] | None = None
     llm: LLMConfig | None = None
+    deployment_mode: str | None = None
 
 
 # ── Portal (Customer-facing) ─────────────────────────────
@@ -90,6 +93,7 @@ class PortalWorkspaceInfo(BaseModel):
     name: str
     ppi_term_count: int
     llm: LLMConfigResponse | None = None
+    deployment_mode: str = "cloud"
     stats: dict = Field(default_factory=lambda: {"anon_count": 0, "last_used": None})
 
 

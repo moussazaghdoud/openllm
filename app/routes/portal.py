@@ -99,6 +99,25 @@ async def portal_revoke_key(
     return {"revoked": True}
 
 
+@router.get("/portal/api/deployment")
+async def portal_deployment(
+    ws_id: str = Depends(require_workspace),
+    store: KVStore = Depends(get_store),
+):
+    """Get deployment mode and on-premise engine status."""
+    from app import nats_router
+
+    mode = await ws_ops.get_deployment_mode(store, ws_id)
+    result = {"deployment_mode": mode}
+
+    if mode == "onprem":
+        result["engine_online"] = await nats_router.check_engine_online(ws_id)
+    else:
+        result["engine_online"] = True  # Cloud is always online
+
+    return result
+
+
 @router.post("/portal/api/test/anonymize")
 async def portal_test_anonymize(
     body: dict,
@@ -225,6 +244,7 @@ textarea { resize:vertical; min-height:80px; }
     <div class="card"><h3>PPI Terms</h3><div class="value" id="statPPI">0</div></div>
     <div class="card"><h3>API Keys</h3><div class="value" id="statKeys">1</div></div>
     <div class="card"><h3>LLM</h3><div class="value" id="statLLM" style="font-size:16px">—</div></div>
+    <div class="card"><h3>Deployment</h3><div class="value" id="statDeploy" style="font-size:16px">—</div><div class="sub" id="statEngine">—</div></div>
   </div>
 
   <!-- PPI Terms -->
@@ -341,7 +361,7 @@ async function connect() {
 }
 
 async function loadAll() {
-  await Promise.all([loadWorkspace(), loadPPI(), loadKeys(), loadLLM()]);
+  await Promise.all([loadWorkspace(), loadPPI(), loadKeys(), loadLLM(), loadDeployment()]);
 }
 
 async function loadWorkspace() {
@@ -460,6 +480,22 @@ async function loadLLM() {
     <div class="info-row"><span class="info-label">Status</span><span class="badge badge-green">configured</span></div>
     <p style="color:var(--text2);font-size:12px;margin-top:12px">Contact your administrator to change LLM configuration.</p>
   `;
+}
+
+// Deployment Mode
+async function loadDeployment() {
+  const r = await fetch(B+'/portal/api/deployment', {headers:hdr()});
+  const d = await r.json();
+  const el = document.getElementById('statDeploy');
+  const eng = document.getElementById('statEngine');
+  if (d.deployment_mode === 'onprem') {
+    el.innerHTML = '<span class="badge" style="background:rgba(116,185,255,.15);color:var(--blue)">on-premise</span>';
+    eng.textContent = d.engine_online ? 'Engine connected' : 'Engine offline';
+    eng.style.color = d.engine_online ? 'var(--green)' : 'var(--red)';
+  } else {
+    el.innerHTML = '<span class="badge badge-green">cloud</span>';
+    eng.textContent = 'Hosted by SecureLLM';
+  }
 }
 
 // Live Test

@@ -18,7 +18,7 @@ async def create_workspace(
     ws_id = uuid.uuid4().hex[:12]
     api_key = generate_api_key()
 
-    ws_data = {"id": ws_id, "name": name}
+    ws_data = {"id": ws_id, "name": name, "deployment_mode": "cloud"}
     await store.set(f"ws:{ws_id}", json.dumps(ws_data))
     await store.set(f"apikey:{hash_key(api_key)}", ws_id)
 
@@ -42,6 +42,8 @@ async def get_workspace(store: KVStore, ws_id: str) -> dict | None:
         return None
     ws = json.loads(raw)
 
+    ws.setdefault("deployment_mode", "cloud")
+
     raw_terms = await store.get(f"ws:{ws_id}:ppi_terms")
     ws["ppi_term_count"] = len(json.loads(raw_terms)) if raw_terms else 0
 
@@ -60,6 +62,15 @@ async def get_workspace(store: KVStore, ws_id: str) -> dict | None:
     return ws
 
 
+async def get_deployment_mode(store: KVStore, ws_id: str) -> str:
+    """Get workspace deployment mode: 'cloud' or 'onprem'."""
+    raw = await store.get(f"ws:{ws_id}")
+    if not raw:
+        return "cloud"
+    ws = json.loads(raw)
+    return ws.get("deployment_mode", "cloud")
+
+
 async def get_llm_config(store: KVStore, ws_id: str) -> dict | None:
     raw = await store.get(f"ws:{ws_id}:llm")
     if not raw:
@@ -69,15 +80,22 @@ async def get_llm_config(store: KVStore, ws_id: str) -> dict | None:
 
 async def update_workspace(
     store: KVStore, ws_id: str, name: str | None = None,
-    ppi_terms: list[str] | None = None, llm: dict | None = None
+    ppi_terms: list[str] | None = None, llm: dict | None = None,
+    deployment_mode: str | None = None,
 ) -> dict | None:
     raw = await store.get(f"ws:{ws_id}")
     if not raw:
         return None
 
     ws = json.loads(raw)
+    changed = False
     if name is not None:
         ws["name"] = name
+        changed = True
+    if deployment_mode is not None:
+        ws["deployment_mode"] = deployment_mode
+        changed = True
+    if changed:
         await store.set(f"ws:{ws_id}", json.dumps(ws))
 
     if ppi_terms is not None:

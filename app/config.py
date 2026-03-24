@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # NATS (for on-premise tunnel)
+    nats_enabled: bool = False
+    nats_url: str = "nats://localhost:4222"
+    nats_token: str = ""
+    nats_request_timeout: int = 120
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

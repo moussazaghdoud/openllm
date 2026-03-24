@@ -60,7 +60,10 @@ async def update_workspace(
     store: KVStore = Depends(get_store),
 ):
     llm_dict = body.llm.model_dump() if body.llm else None
-    ws = await ws_ops.update_workspace(store, ws_id, body.name, body.ppi_terms, llm_dict)
+    ws = await ws_ops.update_workspace(
+        store, ws_id, body.name, body.ppi_terms, llm_dict,
+        deployment_mode=body.deployment_mode,
+    )
     if not ws:
         raise HTTPException(404, "Workspace not found")
     return WorkspaceResponse(**ws)

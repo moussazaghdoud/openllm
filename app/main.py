@@ -12,6 +12,7 @@ from fastapi import FastAPI
 
 from app.middleware import ObservabilityMiddleware
 from app.storage import close_store
+from app import nats_router
 from app.routes import anonymize, chat, dashboard, files, health, portal, translate, workspaces
 
 logging.basicConfig(
@@ -38,6 +39,12 @@ app.include_router(files.router)
 app.include_router(translate.router)
 
 
+@app.on_event("startup")
+async def startup():
+    await nats_router.connect()
+
+
 @app.on_event("shutdown")
 async def shutdown():
+    await nats_router.close()
     await close_store()
