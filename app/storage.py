@@ -90,15 +90,23 @@ async def get_store() -> KVStore:
         return _store
 
     # Try Redis first
-    try:
-        client = aioredis.from_url(
-            settings.redis_url, decode_responses=True, max_connections=20
-        )
-        await client.ping()
-        _store = RedisStore(client)
-        logger.info("Connected to Redis at %s", settings.redis_url)
-    except Exception as e:
-        logger.warning("Redis unavailable (%s) — using in-memory store", e)
+    redis_url = settings.redis_url.strip()
+    if redis_url and redis_url.startswith(("redis://", "rediss://", "unix://")):
+        try:
+            client = aioredis.from_url(
+                redis_url, decode_responses=True, max_connections=20
+            )
+            await client.ping()
+            _store = RedisStore(client)
+            logger.info("Connected to Redis")
+        except Exception as e:
+            logger.warning("Redis unavailable (%s) — using in-memory store", e)
+            _store = MemoryStore()
+    else:
+        if redis_url:
+            logger.warning("Invalid REDIS_URL '%s' — using in-memory store", redis_url[:20])
+        else:
+            logger.info("No REDIS_URL set — using in-memory store")
         _store = MemoryStore()
 
     return _store

@@ -161,3 +161,114 @@ async def download_file(
             "Content-Length": str(len(content)),
         },
     )
+
+
+# ── Async Translation (background job) ──────────────────
+
+@router.post("/translate/async")
+async def translate_async(
+    req: TranslateRequest,
+    workspace_id: str = Depends(require_workspace),
+    store: KVStore = Depends(get_store),
+):
+    """Start a translation as a background job. Returns job_id to poll for status.
+
+    Use this for large documents that would timeout on /v1/translate.
+    """
+    from app.engine.jobs import create_job, run_in_background
+
+    if not req.file_id.startswith(f"file:{workspace_id}:"):
+        raise HTTPException(403, "File does not belong to this workspace")
+
+    raw_file = await store.get(f"{req.file_id}:raw")
+    if not raw_file:
+        raise HTTPException(404, "Original file not found or expired")
+
+    file_meta_raw = await store.get(req.file_id)
+    if not file_meta_raw:
+        raise HTTPException(404, "File metadata not found")
+
+    llm_config = await ws_ops.get_llm_config(store, workspace_id)
+    if not llm_config:
+        raise HTTPException(503, "LLM not configured")
+
+    job_id = await create_job(store, workspace_id, "translate", {
+        "file_id": req.file_id,
+        "language": req.language,
+    })
+
+    async def do_translate():
+        from app.engine.jobs import update_job
+        file_meta = json.loads(file_meta_raw)
+        filename = file_meta["filename"]
+        file_bytes = base64.b64decode(raw_file)
+        name_lower = filename.lower()
+
+        if name_lower.endswith(".docx"):
+            paragraphs = extract_docx_paragraphs(file_bytes)
+            await update_job(store, job_id, progress=10)
+            translated = await call_translation(paragraphs, req.language, llm_config)
+            if not translated:
+                raise Exception("Translation failed")
+            await update_job(store, job_id, progress=80)
+            result_bytes = rebuild_docx(file_bytes, translated)
+            out_name = filename.rsplit(".", 1)[0] + f"_translated_{req.language}.docx"
+            mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        elif name_lower.endswith((".pptx", ".ppt")):
+            paragraphs = extract_pptx_paragraphs(file_bytes)
+            await update_job(store, job_id, progress=10)
+            translated = await call_translation(paragraphs, req.language, llm_config)
+            if not translated:
+                raise Exception("Translation failed")
+            await update_job(store, job_id, progress=80)
+            result_bytes = rebuild_pptx(file_bytes, translated)
+            out_name = filename.rsplit(".", 1)[0] + f"_translated_{req.language}.pptx"
+            mime = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        elif name_lower.endswith(".pdf"):
+            paragraphs = extract_pdf_paragraphs(file_bytes)
+            await update_job(store, job_id, progress=10)
+            translated = await call_translation(paragraphs, req.language, llm_config)
+            if not translated:
+                raise Exception("Translation failed")
+            await update_job(store, job_id, progress=80)
+            result_bytes = build_docx_from_paragraphs(translated)
+            out_name = filename.rsplit(".", 1)[0] + f"_translated_{req.language}.docx"
+            mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        else:
+            raise Exception(f"Unsupported file type: {filename}")
+
+        dl_id = f"dl:{workspace_id}:{uuid.uuid4().hex[:10]}"
+        dl_data = {"filename": out_name, "mime": mime, "content": base64.b64encode(result_bytes).decode()}
+        await store.set(dl_id, json.dumps(dl_data), ex=TRANSLATED_FILE_TTL)
+
+        return {"filename": out_name, "download_id": dl_id, "download_url": f"/v1/download/{dl_id}", "paragraphs_translated": len(translated)}
+
+    run_in_background(store, job_id, do_translate())
+
+    return {"job_id": job_id, "status": "pending"}
+
+
+@router.get("/jobs/{job_id:path}")
+async def get_job_status(
+    job_id: str,
+    workspace_id: str = Depends(require_workspace),
+    store: KVStore = Depends(get_store),
+):
+    """Poll job status. Returns status, progress, and result when done."""
+    if not job_id.startswith(f"job:{workspace_id}:"):
+        raise HTTPException(403, "Job does not belong to this workspace")
+
+    from app.engine.jobs import get_job
+    job = await get_job(store, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found or expired")
+
+    return {
+        "job_id": job["id"],
+        "status": job["status"],
+        "progress": job["progress"],
+        "result": job["result"],
+        "error": job["error"],
+        "created_at": job["created_at"],
+        "updated_at": job["updated_at"],
+    }

@@ -170,11 +170,16 @@ async def llm_proxy(
         choices = llm_data.get("choices", [])
         usage = llm_data.get("usage")
 
+    # Step 4: Deanonymize and sanitize output
+    from app.engine.sanitizer import sanitize_response
     for choice in choices:
         content = choice.get("message", {}).get("content", "")
         if content:
             for mid in mapping_ids:
                 content = await pipeline.deanonymize(content, mid)
+            content, sanitize_warnings = sanitize_response(content)
+            if sanitize_warnings:
+                logger.warning("Sanitization warnings for ws=%s: %s", workspace_id, sanitize_warnings)
             choice["message"]["content"] = content
 
     return LLMProxyResponse(
