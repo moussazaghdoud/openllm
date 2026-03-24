@@ -363,18 +363,17 @@ function renderFiles(){
         <span class="fc-chars">${f.char_count}</span>`;
       zb.appendChild(row);
     } else {
-      // Zone A: progress card
-      const card=document.createElement('div');
-      card.className='file-card zone-a';
-      const labels={uploading:'Uploading...',wave1:'Wave 1: Removing personal data...',wave2:'Wave 2: Protecting business context...'};
+      // Zone A: compact row with inline progress
+      const row=document.createElement('div');
+      row.className='file-check';
+      row.style.borderLeft='3px solid var(--orange)';
+      const labels={uploading:'uploading',wave1:'wave 1',wave2:'wave 2'};
       const colors={uploading:'var(--text3)',wave1:'var(--blue)',wave2:'var(--orange)'};
-      const progress={uploading:20,wave1:50,wave2:85};
-      const barClass={uploading:'bar-wave1',wave1:'bar-wave1',wave2:'bar-wave2'};
-      card.innerHTML=`
-        <div class="fc-header"><span class="fc-icon">${fIcon(f.filename)}</span><span class="fc-name">${esc(f.filename)}</span><span class="fc-size">${fmtSize(f.size)}</span></div>
-        <div class="fc-status" style="color:${colors[f.status]||'var(--text3)'}">${labels[f.status]}</div>
-        <div class="anon-progress"><div class="bar ${barClass[f.status]}" style="width:${progress[f.status]}%"></div></div>`;
-      za.appendChild(card);
+      row.innerHTML=`
+        <span class="fc-icon">${fIcon(f.filename)}</span>
+        <span class="fc-name">${esc(f.filename)}</span>
+        <span class="fc-chars" style="color:${colors[f.status]}">${labels[f.status]}</span>`;
+      za.appendChild(row);
     }
   });
 
