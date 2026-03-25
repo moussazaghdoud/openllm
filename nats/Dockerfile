@@ -1,4 +1,11 @@
-FROM nats:2.10-alpine
+FROM alpine:3.19
+
+# Install NATS server
+RUN apk add --no-cache curl && \
+    curl -fsSL https://github.com/nats-io/nats-server/releases/download/v2.10.24/nats-server-v2.10.24-linux-amd64.tar.gz | tar xz && \
+    mv nats-server-v2.10.24-linux-amd64/nats-server /usr/local/bin/ && \
+    rm -rf nats-server-v2.10.24-linux-amd64 && \
+    apk del curl
 
 RUN mkdir -p /etc/nats /nats-config
 
