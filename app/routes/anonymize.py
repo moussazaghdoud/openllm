@@ -136,12 +136,24 @@ async def llm_proxy(
     # Route to on-premise engine if configured
     mode = await ws_ops.get_deployment_mode(store, workspace_id)
     if mode == "onprem":
-        body = req.model_dump_json()
-        resp = await _forward_to_onprem(workspace_id, request, body)
-        if resp["status"] != 200:
-            raise HTTPException(resp["status"], json.loads(resp["body"]))
-        data = json.loads(resp["body"])
-        return LLMProxyResponse(**data)
+        try:
+            body = req.model_dump_json()
+            resp = await _forward_to_onprem(workspace_id, request, body)
+            logger.info("Chat on-prem response: status=%s body=%s", resp.get("status"), str(resp.get("body", ""))[:300])
+            if resp["status"] != 200:
+                detail = resp.get("body", "Unknown error")
+                try:
+                    detail = json.loads(detail)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                raise HTTPException(resp["status"], detail)
+            data = json.loads(resp["body"])
+            return LLMProxyResponse(**data)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("Chat on-prem error: %s", e, exc_info=True)
+            raise HTTPException(502, f"On-premise error: {str(e)}")
 
     # Load per-workspace LLM config
     llm_config = await ws_ops.get_llm_config(store, workspace_id)
@@ -221,7 +233,7 @@ async def llm_proxy(
         url = f"{upstream_url}/v1/chat/completions"
 
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=120.0, verify=False) as client:
             resp = await client.post(url, headers=headers, json=upstream_payload)
             resp.raise_for_status()
             llm_data = resp.json()
