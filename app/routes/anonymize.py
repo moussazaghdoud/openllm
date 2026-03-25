@@ -36,7 +36,8 @@ async def _forward_to_onprem(
     workspace_id: str, request: Request, body: str,
 ) -> dict:
     """Forward a request to the on-premise engine via NATS."""
-    headers = dict(request.headers)
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "connection", "transfer-encoding", "content-length")}
+    logger.info("Forwarding to on-prem: %s %s (ws=%s)", request.method, request.url.path, workspace_id)
     response = await nats_router.forward_request(
         workspace_id=workspace_id,
         method=request.method,
@@ -44,6 +45,7 @@ async def _forward_to_onprem(
         headers=headers,
         body=body,
     )
+    logger.info("On-prem response received: status=%s", response.get("status"))
     return response
 
 
@@ -60,12 +62,24 @@ async def anonymize(
     # Route to on-premise engine if workspace is configured for it
     mode = await ws_ops.get_deployment_mode(store, workspace_id)
     if mode == "onprem":
-        body = req.model_dump_json()
-        resp = await _forward_to_onprem(workspace_id, request, body)
-        if resp["status"] != 200:
-            raise HTTPException(resp["status"], json.loads(resp["body"]))
-        data = json.loads(resp["body"])
-        return AnonymizeResponse(**data)
+        try:
+            body = req.model_dump_json()
+            resp = await _forward_to_onprem(workspace_id, request, body)
+            logger.info("NATS response: status=%s body=%s", resp.get("status"), str(resp.get("body", ""))[:200])
+            if resp["status"] != 200:
+                detail = resp.get("body", "Unknown error")
+                try:
+                    detail = json.loads(detail)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                raise HTTPException(resp["status"], detail)
+            data = json.loads(resp["body"])
+            return AnonymizeResponse(**data)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("On-prem forwarding error: %s", e, exc_info=True)
+            raise HTTPException(502, f"On-premise forwarding error: {str(e)}")
 
     pipeline = await PrivacyPipeline.for_workspace(store, workspace_id)
     anonymized_text, mapping_id = await pipeline.anonymize(req.text)
