@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import logging
@@ -13,6 +14,7 @@ from app.auth import require_workspace
 from app.engine.pipeline import PrivacyPipeline
 from app.storage import KVStore, get_store
 from app import workspace as ws_ops
+from app import nats_router
 
 logger = logging.getLogger("securellm.files")
 
@@ -121,6 +123,38 @@ async def upload_file(
     if not file.filename:
         raise HTTPException(400, "Filename required")
 
+    # For on-prem workspaces, forward the file via NATS
+    mode = await ws_ops.get_deployment_mode(store, workspace_id)
+    if mode == "onprem":
+        try:
+            resp = await nats_router.forward_request(
+                workspace_id=workspace_id,
+                method="POST",
+                path="/v1/upload-raw",
+                headers={
+                    "X-API-Key": x_api_key,
+                    "Content-Type": "application/json",
+                },
+                body=json.dumps({
+                    "filename": file.filename,
+                    "content_b64": base64.b64encode(content).decode("ascii"),
+                    "workspace_id": workspace_id,
+                }),
+            )
+            if resp["status"] != 200:
+                detail = resp.get("body", "Upload failed")
+                try:
+                    detail = json.loads(detail)
+                except Exception:
+                    pass
+                raise HTTPException(resp["status"], detail)
+            return json.loads(resp["body"])
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("On-prem upload error: %s", e)
+            raise HTTPException(502, f"On-premise upload error: {str(e)}")
+
     # Extract text
     try:
         raw_text = extract_text(content, file.filename)
@@ -159,6 +193,61 @@ async def upload_file(
     return {
         "file_id": file_id,
         "filename": file.filename,
+        "size": len(content),
+        "char_count": len(raw_text),
+        "preview": anonymized_text[:200] + "..." if len(anonymized_text) > 200 else anonymized_text,
+    }
+
+
+@router.post("/upload-raw")
+async def upload_file_raw(
+    body: dict,
+    workspace_id: str = Depends(require_workspace),
+    store: KVStore = Depends(get_store),
+):
+    """Upload a file as base64 JSON — used by the NATS bridge for on-prem uploads."""
+    filename = body.get("filename", "")
+    content_b64 = body.get("content_b64", "")
+
+    if not filename or not content_b64:
+        raise HTTPException(400, "filename and content_b64 required")
+
+    content = base64.b64decode(content_b64)
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(413, "File too large (max 20MB)")
+
+    try:
+        raw_text = extract_text(content, filename)
+    except ValueError as e:
+        raise HTTPException(415, str(e))
+
+    if not raw_text.strip():
+        raise HTTPException(422, "No text content found in file")
+
+    if len(raw_text) > 50_000:
+        raw_text = raw_text[:50_000] + "\n\n[Document truncated at 50,000 characters]"
+
+    pipeline = await PrivacyPipeline.for_workspace(store, workspace_id)
+    anonymized_text, mapping_id = await pipeline.anonymize(raw_text)
+    await ws_ops.increment_stats(store, workspace_id)
+
+    file_id = f"file:{workspace_id}:{uuid.uuid4().hex[:10]}"
+    file_data = {
+        "filename": filename,
+        "size": len(content),
+        "char_count": len(raw_text),
+        "anonymized_text": anonymized_text,
+        "mapping_id": mapping_id,
+    }
+    await store.set(file_id, json.dumps(file_data), ex=FILE_TTL)
+    await store.set(f"{file_id}:raw", base64.b64encode(content).decode(), ex=FILE_TTL)
+
+    logger.info("File uploaded (raw): %s (%d bytes)", filename, len(content))
+
+    return {
+        "file_id": file_id,
+        "filename": filename,
         "size": len(content),
         "char_count": len(raw_text),
         "preview": anonymized_text[:200] + "..." if len(anonymized_text) > 200 else anonymized_text,
