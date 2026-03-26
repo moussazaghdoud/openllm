@@ -314,27 +314,53 @@ document.getElementById('authKey').addEventListener('keydown',e=>{if(e.key==='En
 // ── File Upload with Magic Animation ──
 async function handleFiles(fileList){
   for(const file of fileList){
-    if(file.size>20*1048576){toast(file.name+' too large (max 20MB)','error');continue}
+    if(file.size>50*1048576){toast(file.name+' too large (max 50MB)','error');continue}
     const idx=attachedFiles.length;
-    attachedFiles.push({filename:file.name, size:file.size, status:'uploading', file_id:null, char_count:0});
+    attachedFiles.push({filename:file.name, size:file.size, status:'uploading', file_id:null, char_count:0, progress:0});
     renderFiles();
 
-    // Simulate wave 1
-    await sleep(400);
+    // Step 1: Uploading
+    await sleep(300);
+    attachedFiles[idx].status='uploading';
+    attachedFiles[idx].progress=20;
+    renderFiles();
+
+    // Step 2: Wave 1 — PPI anonymization
+    await sleep(500);
     attachedFiles[idx].status='wave1';
+    attachedFiles[idx].progress=40;
     renderFiles();
 
-    // Upload
+    // Upload (actual network call — wave 1 + wave 2 happen server-side)
     const form=new FormData(); form.append('file',file);
     try{
+      // Start progress animation during upload
+      const progressInterval=setInterval(()=>{
+        if(attachedFiles[idx]&&attachedFiles[idx].progress<85){
+          attachedFiles[idx].progress+=3;
+          if(attachedFiles[idx].progress>60&&attachedFiles[idx].status==='wave1'){
+            attachedFiles[idx].status='wave2';
+          }
+          renderFiles();
+        }
+      },200);
+
       const r=await fetch(B+'/v1/upload',{method:'POST',headers:{'X-API-Key':apiKey},body:form});
+      clearInterval(progressInterval);
+
       if(!r.ok){const err=await r.json();toast('Upload failed: '+(err.detail||'error'),'error');attachedFiles.splice(idx,1);renderFiles();continue}
       const data=await r.json();
 
-      // Wave 2
+      // Step 3: Wave 2 complete
       attachedFiles[idx].status='wave2';
+      attachedFiles[idx].progress=90;
       renderFiles();
-      await sleep(600);
+      await sleep(400);
+
+      // Step 4: Securing complete
+      attachedFiles[idx].progress=100;
+      renderFiles();
+      await sleep(300);
 
       // Ready — auto-select
       attachedFiles[idx]={...attachedFiles[idx],file_id:data.file_id,char_count:data.char_count,status:'ready',selected:true};
@@ -370,12 +396,19 @@ function renderFiles(){
       const row=document.createElement('div');
       row.className='file-check';
       row.style.borderLeft='3px solid var(--orange)';
-      const labels={uploading:'uploading',wave1:'wave 1',wave2:'wave 2'};
+      const labels={uploading:'Uploading...',wave1:'Wave 1: Anonymizing personal data...',wave2:'Wave 2: Anonymizing business data...'};
       const colors={uploading:'var(--text3)',wave1:'var(--blue)',wave2:'var(--orange)'};
+      const barColors={uploading:'var(--text3)',wave1:'var(--blue)',wave2:'var(--orange)'};
+      const pct=f.progress||0;
       row.innerHTML=`
-        <span class="fc-icon">${fIcon(f.filename)}</span>
-        <span class="fc-name">${esc(f.filename)}</span>
-        <span class="fc-chars" style="color:${colors[f.status]}">${labels[f.status]}</span>`;
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span class="fc-icon">${fIcon(f.filename)}</span>
+            <span class="fc-name" style="flex:1">${esc(f.filename)}</span>
+            <span style="font-size:11px;color:${colors[f.status]};white-space:nowrap">${labels[f.status]}</span>
+          </div>
+          <div class="anon-progress"><div class="bar" style="width:${pct}%;background:${barColors[f.status]}"></div></div>
+        </div>`;
       za.appendChild(row);
     }
   });
