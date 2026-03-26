@@ -226,7 +226,7 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
     <div class="shield">&#128737;</div>
     <h2>Secure AI Assistant</h2>
     <p class="subtitle">Your data is anonymized before reaching the AI.<br>No personal or business data ever leaves your control.</p>
-    <input type="password" id="authKey" value="slm_yTphNO_1ep7Wk1EW7j-JG2J3kcElXHw3CUCwrHpoD-Q" placeholder="API Key" />
+    <input type="password" id="authKey" value="slm_G_inHOaazg6-dcbHswPudsgS8G1w6FWltDnVqFus_94" placeholder="API Key" />
     <button class="btn" onclick="login()">Start Chatting</button>
   </div>
 </div>
