@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from fastapi import Request as FastAPIRequest
+
 from app.auth import require_workspace
 from app.engine.translator import (
     call_translation,
@@ -20,6 +22,7 @@ from app.engine.translator import (
 )
 from app.storage import KVStore, get_store
 from app import workspace as ws_ops
+from app import nats_router
 
 logger = logging.getLogger("securellm.translate")
 
@@ -44,6 +47,7 @@ class TranslateResponse(BaseModel):
 @router.post("/translate", response_model=TranslateResponse)
 async def translate_document(
     req: TranslateRequest,
+    request: FastAPIRequest,
     workspace_id: str = Depends(require_workspace),
     store: KVStore = Depends(get_store),
 ):
@@ -53,6 +57,34 @@ async def translate_document(
     - PPTX: text replaced per-slide, shapes/images/animations preserved
     - PDF: text extracted, translated, output as DOCX (PDFs can't be rebuilt)
     """
+    # Route to on-premise engine for on-prem workspaces
+    mode = await ws_ops.get_deployment_mode(store, workspace_id)
+    if mode == "onprem":
+        try:
+            headers = {k: v for k, v in request.headers.items()
+                       if k.lower() not in ("host", "connection", "transfer-encoding", "content-length")}
+            resp = await nats_router.forward_request(
+                workspace_id=workspace_id,
+                method="POST",
+                path="/v1/translate",
+                headers=headers,
+                body=req.model_dump_json(),
+            )
+            if resp["status"] != 200:
+                detail = resp.get("body", "Translation failed")
+                try:
+                    detail = json.loads(detail)
+                except Exception:
+                    pass
+                raise HTTPException(resp["status"], detail)
+            data = json.loads(resp["body"])
+            return TranslateResponse(**data)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("On-prem translate error: %s", e)
+            raise HTTPException(502, f"On-premise translation error: {str(e)}")
+
     if not req.file_id.startswith(f"file:{workspace_id}:"):
         raise HTTPException(403, "File does not belong to this workspace")
 
