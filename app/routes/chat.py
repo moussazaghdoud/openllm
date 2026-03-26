@@ -276,7 +276,6 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
         <button class="send-btn" id="sendBtn" onclick="send()">&#9654;</button>
       </div>
       <div class="input-footer">
-        <label class="toggle"><input type="checkbox" id="showPrivacy" onchange="togglePrivacy()"> Show what AI sees</label>
         <span style="font-size:11px;color:var(--text3)">2-wave anonymization active</span>
       </div>
     </div>
