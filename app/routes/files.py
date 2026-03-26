@@ -21,7 +21,8 @@ logger = logging.getLogger("securellm.files")
 router = APIRouter(prefix="/v1", tags=["files"])
 
 # Max file size: 10MB
-MAX_FILE_SIZE = 20 * 1024 * 1024
+from app.config import settings
+MAX_FILE_SIZE = settings.max_file_size_mb * 1024 * 1024
 # File context TTL: 24 hours
 FILE_TTL = 86400
 
@@ -117,8 +118,10 @@ async def upload_file(
     Returns a file_id that can be referenced in chat messages.
     """
     content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(413, "File too large (max 20MB)")
+    max_size = await ws_ops.get_max_file_size(store, workspace_id)
+    max_mb = max_size // (1024 * 1024)
+    if len(content) > max_size:
+        raise HTTPException(413, f"File too large (max {max_mb}MB)")
 
     if not file.filename:
         raise HTTPException(400, "Filename required")
@@ -273,4 +276,5 @@ async def get_file_info(
         "filename": data["filename"],
         "size": data["size"],
         "char_count": data["char_count"],
+        "anonymized_text": data.get("anonymized_text", ""),
     }

@@ -121,6 +121,23 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
 .bar-wave1 { background:linear-gradient(90deg,var(--blue),var(--accent)); }
 .bar-wave2 { background:linear-gradient(90deg,var(--accent),var(--green)); }
 
+/* Preview link */
+.fc-preview { font-size:10px; color:var(--green); cursor:pointer; flex-shrink:0; opacity:.7; transition:var(--transition); text-decoration:none; }
+.fc-preview:hover { opacity:1; text-decoration:underline; }
+
+/* Anonymized preview modal */
+.anon-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999; align-items:center; justify-content:center; }
+.anon-modal-overlay.open { display:flex; }
+.anon-modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); max-width:680px; width:90%; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.4); }
+.anon-modal-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.anon-modal-header h3 { font-size:14px; font-weight:600; color:var(--green); display:flex; align-items:center; gap:8px; }
+.anon-modal-close { background:none; border:none; color:var(--text3); font-size:18px; cursor:pointer; padding:4px; }
+.anon-modal-close:hover { color:var(--text1); }
+.anon-modal-body { padding:20px; overflow-y:auto; font-size:13px; line-height:1.8; color:var(--text2); white-space:pre-wrap; word-break:break-word; font-family:'SF Mono','Fira Code',monospace; }
+.anon-modal-body .ph-pii { color:var(--blue); background:rgba(99,145,255,.12); padding:1px 5px; border-radius:3px; font-weight:600; }
+.anon-modal-body .ph-ppi { color:var(--orange); background:rgba(255,165,0,.12); padding:1px 5px; border-radius:3px; font-weight:600; }
+.anon-modal-hint { padding:12px 20px; border-top:1px solid var(--border); font-size:11px; color:var(--text3); display:flex; align-items:center; gap:6px; }
+
 /* Upload area */
 .upload-area { padding:12px; border-top:1px solid var(--border); }
 .drop-zone { border:2px dashed var(--border); border-radius:var(--radius-sm); padding:14px 12px; text-align:center; cursor:pointer; transition:var(--transition); }
@@ -282,6 +299,18 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
   </div>
 </div>
 
+<!-- Anonymized preview modal -->
+<div class="anon-modal-overlay" id="anonModal" onclick="if(event.target===this)closeAnonModal()">
+  <div class="anon-modal">
+    <div class="anon-modal-header">
+      <h3>&#128737; What AI sees</h3>
+      <button class="anon-modal-close" onclick="closeAnonModal()">&times;</button>
+    </div>
+    <div class="anon-modal-body" id="anonModalBody"></div>
+    <div class="anon-modal-hint">&#128274; All highlighted tokens replace your real data. AI never sees the originals.</div>
+  </div>
+</div>
+
 <script>
 const B = window.location.origin;
 let apiKey='', wsId='', wsInfo=null, history=[];
@@ -387,7 +416,7 @@ function renderFiles(){
         <input type="checkbox" ${f.selected?'checked':''} onchange="toggleSelect(${i},this.checked)"/>
         <span class="fc-icon">${fIcon(f.filename)}</span>
         <span class="fc-name">${esc(f.filename)}</span>
-        <span class="fc-chars">${f.char_count}</span>
+        <a class="fc-preview" onclick="event.preventDefault();viewAnonymized('${f.file_id}')" title="See what AI sees">view</a>
         <button class="fc-del" onclick="event.preventDefault();confirmRemove(${i})" title="Remove">&#10005;</button>`;
       zb.appendChild(row);
     } else {
@@ -419,6 +448,22 @@ function toggleSelect(i, checked){
   attachedFiles[i].selected=checked;
   renderFiles();
 }
+
+async function viewAnonymized(fileId){
+  try{
+    const r=await fetch(B+'/v1/files/'+encodeURIComponent(fileId),{headers:hdr()});
+    if(!r.ok){toast('Could not load preview','error');return}
+    const d=await r.json();
+    let h=esc(d.anonymized_text)
+      .replace(/\[PRODUCT_\d+\]/g,'<span class="ph-ppi">$&</span>')
+      .replace(/\[COMPANY_\d+\]/g,'<span class="ph-ppi">$&</span>')
+      .replace(/\[PROJECT_\d+\]/g,'<span class="ph-ppi">$&</span>')
+      .replace(/&lt;[A-Z_]+_\d+&gt;/g,'<span class="ph-pii">$&</span>');
+    document.getElementById('anonModalBody').innerHTML=h;
+    document.getElementById('anonModal').classList.add('open');
+  }catch(e){toast('Error: '+e.message,'error')}
+}
+function closeAnonModal(){document.getElementById('anonModal').classList.remove('open')}
 
 function getSelectedFiles(){
   return attachedFiles.filter(f=>f.selected&&f.file_id);
