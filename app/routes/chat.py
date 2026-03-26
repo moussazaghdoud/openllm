@@ -310,6 +310,8 @@ async function login(){
   }catch(e){toast('Connection error','error')}
 }
 document.getElementById('authKey').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+// Auto-login if key is pre-filled
+if(document.getElementById('authKey').value.trim()) login();
 
 // ── File Upload with Magic Animation ──
 async function handleFiles(fileList){
