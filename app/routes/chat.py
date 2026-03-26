@@ -490,11 +490,6 @@ async function send(){
   const file_ids=getSelectedFiles().map(f=>f.file_id);
 
   try{
-    // Privacy panel
-    if(document.getElementById('showPrivacy').checked){
-      const ar=await fetch(B+'/v1/anonymize',{method:'POST',headers:hdr(),body:JSON.stringify({text,workspace_id:wsId})});
-      if(ar.ok){const ad=await ar.json();showPrivacy(ad.anonymized_text)}
-    }
     const r=await fetch(B+'/v1/chat/completions',{method:'POST',headers:hdr(),body:JSON.stringify({workspace_id:wsId,messages:history,model:'default',file_ids})});
     typing.remove();document.getElementById('sendBtn').disabled=false;
     if(!r.ok){const err=await r.json();addMsg('system','Error: '+(err.detail||'Something went wrong'));return}
@@ -530,7 +525,7 @@ function addMsg(role,text){
 function scrollEnd(){const m=document.getElementById('messages');m.scrollTop=m.scrollHeight}
 
 // ── Privacy Panel ──
-function togglePrivacy(){document.getElementById('privacyPanel').classList.toggle('active',document.getElementById('showPrivacy').checked)}
+function togglePrivacy(){}
 function showPrivacy(text){
   let h=esc(text)
     .replace(/\[PRODUCT_\d+\]/g,'<span class="ph-ppi">$&</span>')
