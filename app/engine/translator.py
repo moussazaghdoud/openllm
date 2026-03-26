@@ -71,7 +71,7 @@ async def call_translation(
             payload = {"model": model, "messages": messages, "max_tokens": 8192, "temperature": 0.3}
 
         try:
-            async with httpx.AsyncClient(timeout=TRANSLATION_TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=TRANSLATION_TIMEOUT, verify=False) as client:
                 resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
                 data = resp.json()

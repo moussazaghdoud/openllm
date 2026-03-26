@@ -78,6 +78,34 @@ async def translate_document(
                     pass
                 raise HTTPException(resp["status"], detail)
             data = json.loads(resp["body"])
+
+            # The translated file is stored in local Redis — fetch it and cache here
+            dl_id = data.get("download_id", "")
+            if dl_id:
+                dl_resp = await nats_router.forward_request(
+                    workspace_id=workspace_id,
+                    method="GET",
+                    path=f"/v1/download-raw/{dl_id}",
+                    headers=headers,
+                    body="",
+                )
+                if dl_resp["status"] == 200:
+                    # The body comes double-encoded from bridge — unwrap
+                    dl_body = dl_resp["body"]
+                    try:
+                        # Bridge wraps response in json.dumps, so body is a JSON string
+                        parsed = json.loads(dl_body)
+                        if isinstance(parsed, str):
+                            # Double-encoded: json.dumps(json.dumps(data))
+                            dl_body = parsed
+                        elif isinstance(parsed, dict) and "content" in parsed:
+                            # Already a dict — re-serialize for storage
+                            dl_body = json.dumps(parsed)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                    await store.set(dl_id, dl_body, ex=86400)
+                    logger.info("Cached translated file from on-prem: %s", dl_id)
+
             return TranslateResponse(**data)
         except HTTPException:
             raise
@@ -193,6 +221,19 @@ async def download_file(
             "Content-Length": str(len(content)),
         },
     )
+
+
+@router.get("/download-raw/{dl_id:path}")
+async def download_file_raw(
+    dl_id: str,
+    store: KVStore = Depends(get_store),
+):
+    """Return translated file as JSON (for NATS bridge transfer)."""
+    raw = await store.get(dl_id)
+    if not raw:
+        raise HTTPException(404, "File not found or expired")
+    # Return the raw JSON string directly — it contains {content, mime, filename}
+    return json.loads(raw)
 
 
 # ── Async Translation (background job) ──────────────────
