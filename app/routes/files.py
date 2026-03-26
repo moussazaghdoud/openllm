@@ -185,7 +185,6 @@ async def upload_file(
     await store.set(file_id, json.dumps(file_data), ex=FILE_TTL)
 
     # Store raw file bytes for translation (base64 encoded)
-    import base64
     await store.set(f"{file_id}:raw", base64.b64encode(content).decode(), ex=FILE_TTL)
 
     logger.info("File uploaded: %s (%d bytes, %d chars)", file.filename, len(content), len(raw_text))
