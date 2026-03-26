@@ -410,14 +410,21 @@ function renderFiles(){
   attachedFiles.forEach((f,i)=>{
     if(f.status==='ready'){
       // Zone B: compact checkbox list
-      const row=document.createElement('label');
+      const row=document.createElement('div');
       row.className='file-check'+(f.selected?' selected':'');
+      row.onclick=()=>{toggleSelect(i,!f.selected)};
       row.innerHTML=`
-        <input type="checkbox" ${f.selected?'checked':''} onchange="toggleSelect(${i},this.checked)"/>
-        <span class="fc-icon">${fIcon(f.filename)}</span>
-        <span class="fc-name">${esc(f.filename)}</span>
-        <a class="fc-preview" onclick="event.preventDefault();event.stopPropagation();viewAnonymized('${f.file_id}')" title="See what AI sees">view</a>
-        <button class="fc-del" onclick="event.preventDefault();confirmRemove(${i})" title="Remove">&#10005;</button>`;
+        <input type="checkbox" ${f.selected?'checked':''} onclick="event.stopPropagation()" onchange="toggleSelect(${i},this.checked)"/>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="fc-icon">${fIcon(f.filename)}</span>
+            <span class="fc-name">${esc(f.filename)}</span>
+            <button class="fc-del" onclick="event.stopPropagation();confirmRemove(${i})" title="Remove">&#10005;</button>
+          </div>
+          <div style="padding-left:22px;margin-top:3px">
+            <a class="fc-preview" onclick="event.stopPropagation();viewAnonymized('${f.file_id}')">&#128065; See what AI sees</a>
+          </div>
+        </div>`;
       zb.appendChild(row);
     } else {
       // Zone A: compact row with inline progress
