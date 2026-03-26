@@ -122,8 +122,8 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
 .bar-wave2 { background:linear-gradient(90deg,var(--accent),var(--green)); }
 
 /* Preview link */
-.fc-preview { font-size:10px; color:var(--green); cursor:pointer; flex-shrink:0; opacity:.7; transition:var(--transition); text-decoration:none; }
-.fc-preview:hover { opacity:1; text-decoration:underline; }
+.fc-preview { font-size:10px; color:var(--green); cursor:pointer; flex-shrink:0; transition:var(--transition); text-decoration:underline; padding:2px 6px; border-radius:4px; background:rgba(16,185,129,.08); position:relative; z-index:2; }
+.fc-preview:hover { background:rgba(16,185,129,.18); }
 
 /* Anonymized preview modal */
 .anon-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999; align-items:center; justify-content:center; }
@@ -416,7 +416,7 @@ function renderFiles(){
         <input type="checkbox" ${f.selected?'checked':''} onchange="toggleSelect(${i},this.checked)"/>
         <span class="fc-icon">${fIcon(f.filename)}</span>
         <span class="fc-name">${esc(f.filename)}</span>
-        <a class="fc-preview" onclick="event.preventDefault();viewAnonymized('${f.file_id}')" title="See what AI sees">view</a>
+        <a class="fc-preview" onclick="event.preventDefault();event.stopPropagation();viewAnonymized('${f.file_id}')" title="See what AI sees">view</a>
         <button class="fc-del" onclick="event.preventDefault();confirmRemove(${i})" title="Remove">&#10005;</button>`;
       zb.appendChild(row);
     } else {
