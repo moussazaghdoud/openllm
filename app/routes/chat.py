@@ -400,12 +400,12 @@ function renderFiles(){
       const barColors={uploading:'var(--text3)',wave1:'var(--blue)',wave2:'var(--orange)'};
       const pct=f.progress||0;
       row.innerHTML=`
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span class="fc-icon">${fIcon(f.filename)}</span>
-            <span class="fc-name" style="flex:1">${esc(f.filename)}</span>
-            <span style="font-size:11px;color:${colors[f.status]};white-space:nowrap">${labels[f.status]}</span>
+        <div style="flex:1;min-width:0;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+            <span class="fc-icon" style="flex-shrink:0">${fIcon(f.filename)}</span>
+            <span class="fc-name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${esc(f.filename)}</span>
           </div>
+          <div style="font-size:10px;color:${colors[f.status]};margin-bottom:4px;padding-left:24px">${labels[f.status]}</div>
           <div class="anon-progress"><div class="bar" style="width:${pct}%;background:${barColors[f.status]}"></div></div>
         </div>`;
       za.appendChild(row);
