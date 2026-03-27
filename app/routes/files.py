@@ -202,7 +202,7 @@ async def upload_file(
 @router.post("/upload-raw")
 async def upload_file_raw(
     body: dict,
-    workspace_id: str = Depends(require_workspace),
+    workspace_id: str = Depends(require_workspace_flexible),
     store: KVStore = Depends(get_store),
 ):
     """Upload a file as base64 JSON — used by the NATS bridge for on-prem uploads."""
