@@ -47,11 +47,18 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sa
 .badge-red { background: rgba(225,112,85,.15); color: var(--red); }
 .badge-orange { background: rgba(253,203,110,.15); color: var(--orange); }
 
-/* Auth bar */
-.auth-bar { background: var(--surface2); padding: 12px 32px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
-.auth-bar input { flex: 1; max-width: 400px; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 13px; }
-.auth-bar input:focus { outline: none; border-color: var(--accent); }
-.auth-bar label { color: var(--text2); font-size: 13px; }
+/* Auth screen */
+.auth-screen { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+.auth-screen::before { content: ''; position: absolute; top: -30%; left: 50%; transform: translateX(-50%); width: 600px; height: 600px; background: radial-gradient(circle, rgba(108,92,231,0.08) 0%, rgba(0,184,148,0.04) 40%, transparent 70%); pointer-events: none; }
+.auth-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 48px 40px; width: 400px; max-width: 90vw; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.3); }
+.auth-card .logo-icon { width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, var(--accent), var(--green)); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px; font-weight: 800; color: #fff; }
+.auth-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.auth-card .subtitle { font-size: 13px; color: var(--text2); margin-bottom: 28px; }
+.auth-card input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 13px 16px; border-radius: 8px; font-size: 14px; margin-bottom: 12px; transition: border-color 0.2s; }
+.auth-card input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,92,231,0.15); }
+.auth-card .btn-login { width: 100%; padding: 13px; border-radius: 8px; font-size: 14px; font-weight: 600; background: linear-gradient(135deg, var(--accent), #5a4bd1); color: #fff; border: none; cursor: pointer; transition: all 0.2s; }
+.auth-card .btn-login:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(108,92,231,0.3); }
+.auth-card .auth-error { color: var(--red); font-size: 12px; margin-top: 8px; display: none; }
 
 /* Layout */
 .container { max-width: 1200px; margin: 0 auto; padding: 24px 32px; }
@@ -137,12 +144,16 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
 </div>
 
-<div class="auth-bar" id="authBar">
-  <label>Admin Login</label>
-  <input type="email" id="adminEmail" placeholder="Email" value="admin@securellm.local" />
-  <input type="password" id="adminPassword" placeholder="Password" />
-  <button class="btn btn-primary btn-sm" onclick="checkAuth()">Connect</button>
-  <span id="authError" style="color:#EF4444;font-size:12px;margin-left:8px"></span>
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="logo-icon">S</div>
+    <h2>Admin Dashboard</h2>
+    <p class="subtitle">Sign in to manage workspaces and users</p>
+    <input type="email" id="adminEmail" placeholder="Email" autocomplete="email" />
+    <input type="password" id="adminPassword" placeholder="Password" autocomplete="current-password" />
+    <button class="btn-login" onclick="checkAuth()">Sign In</button>
+    <p class="auth-error" id="authError"></p>
+  </div>
 </div>
 
 <div class="container" id="mainContent" style="display:none">
@@ -324,23 +335,26 @@ async function checkAuth() {
   const password = document.getElementById('adminPassword').value;
   const errEl = document.getElementById('authError');
   errEl.textContent = '';
-  if (!email || !password) { errEl.textContent = 'Enter email and password'; return; }
+  if (!email || !password) { errEl.textContent = 'Enter email and password'; errEl.style.display = 'block'; return; }
   try {
     const lr = await fetch(BASE + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }), credentials: 'same-origin' });
-    if (!lr.ok) { const d = await lr.json().catch(() => ({})); errEl.textContent = d.detail || 'Invalid credentials'; return; }
+    if (!lr.ok) { const d = await lr.json().catch(() => ({})); errEl.textContent = d.detail || 'Invalid credentials'; errEl.style.display = 'block'; return; }
     const data = await lr.json();
-    if (data.user.role !== 'admin') { errEl.textContent = 'Admin access required'; return; }
-    document.getElementById('authBar').style.display = 'none';
-    document.getElementById('mainContent').style.display = 'block';
-    const h = await (await fetch(BASE + '/health')).json();
-    updateHealth(h);
-    await loadWorkspaces();
-    await loadUsers();
-    toast('Connected as ' + data.user.email, 'success');
-  } catch(e) { errEl.textContent = 'Connection failed: ' + e.message; }
+    if (data.user.role !== 'admin') { errEl.textContent = 'Admin access required'; errEl.style.display = 'block'; return; }
+    enterDashboard(data.user.email);
+  } catch(e) { errEl.textContent = 'Connection failed: ' + e.message; errEl.style.display = 'block'; }
+}
+async function enterDashboard(email) {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'block';
+  const h = await (await fetch(BASE + '/health')).json();
+  updateHealth(h);
+  await loadWorkspaces();
+  await loadUsers();
+  if (email) toast('Signed in as ' + email, 'success');
 }
 // Auto-login if session exists
-(async()=>{try{const r=await fetch(BASE+'/auth/me',{credentials:'same-origin'});if(r.ok){const d=await r.json();if(d.role==='admin'){document.getElementById('authBar').style.display='none';document.getElementById('mainContent').style.display='block';const h=await(await fetch(BASE+'/health')).json();updateHealth(h);await loadWorkspaces();await loadUsers()}}}catch(e){}})();
+(async()=>{try{const r=await fetch(BASE+'/auth/me',{credentials:'same-origin'});if(r.ok){const d=await r.json();if(d.role==='admin') enterDashboard()}}catch(e){}})();
 
 // Health
 async function updateHealth(h) {
