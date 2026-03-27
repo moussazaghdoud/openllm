@@ -10,8 +10,9 @@ to an external Presidio URL for horizontal scaling.
 from __future__ import annotations
 
 import httpx
+import logging
 from presidio_analyzer import AnalyzerEngine
-from presidio_analyzer.nlp_engine import NlpEngineProvider, NerModelConfiguration
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
 
 ENTITY_TYPES = [
@@ -32,14 +33,13 @@ def _get_engines() -> tuple[AnalyzerEngine, AnonymizerEngine]:
         available = [m for m in ["en_core_web_lg", "en_core_web_md", "en_core_web_sm"]
                      if spacy.util.is_package(m)]
         model_name = available[0] if available else "en_core_web_sm"
-        ner_config = NerModelConfiguration(
-            labels_to_ignore=["CARDINAL", "ORDINAL", "QUANTITY", "MONEY", "PRODUCT", "WORK_OF_ART", "LAW", "EVENT", "LANGUAGE"],
-        )
         provider = NlpEngineProvider(nlp_configuration={
             "nlp_engine_name": "spacy",
             "models": [{"lang_code": "en", "model_name": model_name}],
         })
-        _analyzer = AnalyzerEngine(nlp_engine=provider.create_engine(), ner_model_configuration=ner_config)
+        _analyzer = AnalyzerEngine(nlp_engine=provider.create_engine())
+        # Silence noisy NER warnings for unmapped entity types
+        logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
         _anonymizer = AnonymizerEngine()
     return _analyzer, _anonymizer  # type: ignore[return-value]
 
