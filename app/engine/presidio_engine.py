@@ -23,21 +23,23 @@ ENTITY_TYPES = [
 
 # spaCy ORG entities are not natively supported by Presidio,
 # so we add a custom recognizer for organizations.
-from presidio_analyzer import PatternRecognizer, RecognizerResult
+from presidio_analyzer import EntityRecognizer, RecognizerResult
 
 
-class SpacyOrgRecognizer(PatternRecognizer):
+class SpacyOrgRecognizer(EntityRecognizer):
     """Recognizer that leverages spaCy NER to detect ORG entities."""
 
     ENTITIES = ["ORGANIZATION"]
 
     def __init__(self):
         super().__init__(
-            supported_entity="ORGANIZATION",
+            supported_entities=["ORGANIZATION"],
             supported_language="en",
-            patterns=[],
             name="SpacyOrgRecognizer",
         )
+
+    def load(self):
+        pass  # No model to load — we use spaCy's NER via nlp_artifacts
 
     def analyze(self, text, entities, nlp_artifacts=None, regex_flags=None):
         results = []
