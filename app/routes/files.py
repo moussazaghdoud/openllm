@@ -112,11 +112,31 @@ async def upload_file(
     file: UploadFile = File(...),
     store: KVStore = Depends(get_store),
 ):
-    workspace_id = await require_workspace_flexible(request, store)
-    """Upload a file, extract text, anonymize it, and store for chat context.
-
-    Returns a file_id that can be referenced in chat messages.
-    """
+    """Upload a file, extract text, anonymize it, and store for chat context."""
+    from app.auth import _get_jwt_from_request, decode_token, get_user, hash_key
+    # Resolve workspace from JWT cookie or API key
+    workspace_id = None
+    token = _get_jwt_from_request(request)
+    if token:
+        try:
+            payload = decode_token(token)
+            user = await get_user(store, payload.get("sub", ""))
+            if user:
+                workspace_id = user.get("workspace_id")
+                if not workspace_id and user.get("role") == "admin":
+                    workspace_id = payload.get("ws")
+                    if not workspace_id:
+                        keys = await store.scan_iter("ws:*:meta")
+                        if keys:
+                            workspace_id = keys[0].split(":")[1]
+        except Exception:
+            pass
+    if not workspace_id:
+        api_key = request.headers.get("X-API-Key", "")
+        if api_key:
+            workspace_id = await store.get(f"apikey:{hash_key(api_key)}")
+    if not workspace_id:
+        raise HTTPException(401, "Not authenticated")
     content = await file.read()
     max_size = await ws_ops.get_max_file_size(store, workspace_id)
     max_mb = max_size // (1024 * 1024)
