@@ -18,7 +18,41 @@ from presidio_anonymizer import AnonymizerEngine
 ENTITY_TYPES = [
     "PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD",
     "IBAN_CODE", "IP_ADDRESS", "LOCATION", "DATE_TIME",
+    "NRP", "MEDICAL_LICENSE", "URL", "ORGANIZATION",
 ]
+
+# spaCy ORG entities are not natively supported by Presidio,
+# so we add a custom recognizer for organizations.
+from presidio_analyzer import PatternRecognizer, RecognizerResult
+
+
+class SpacyOrgRecognizer(PatternRecognizer):
+    """Recognizer that leverages spaCy NER to detect ORG entities."""
+
+    ENTITIES = ["ORGANIZATION"]
+
+    def __init__(self):
+        super().__init__(
+            supported_entity="ORGANIZATION",
+            supported_language="en",
+            patterns=[],
+            name="SpacyOrgRecognizer",
+        )
+
+    def analyze(self, text, entities, nlp_artifacts=None, regex_flags=None):
+        results = []
+        if nlp_artifacts and nlp_artifacts.entities:
+            for ent in nlp_artifacts.entities:
+                if ent.label_ == "ORG":
+                    results.append(
+                        RecognizerResult(
+                            entity_type="ORGANIZATION",
+                            start=ent.start_char,
+                            end=ent.end_char,
+                            score=0.85,
+                        )
+                    )
+        return results
 
 # Lazy-initialized singletons (heavy on first load due to NLP models)
 _analyzer: AnalyzerEngine | None = None
@@ -38,6 +72,7 @@ def _get_engines() -> tuple[AnalyzerEngine, AnonymizerEngine]:
             "models": [{"lang_code": "en", "model_name": model_name}],
         })
         _analyzer = AnalyzerEngine(nlp_engine=provider.create_engine())
+        _analyzer.registry.add_recognizer(SpacyOrgRecognizer())
         # Silence noisy NER warnings for unmapped entity types
         logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
         _anonymizer = AnonymizerEngine()
