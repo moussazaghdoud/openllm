@@ -422,7 +422,7 @@ function renderFiles(){
             <button class="fc-del" onclick="event.stopPropagation();confirmRemove(${i})" title="Remove">&#10005;</button>
           </div>
           <div style="padding-left:22px;margin-top:3px">
-            <a class="fc-preview" onclick="event.stopPropagation();viewAnonymized('${f.file_id}')">&#128065; See what AI sees</a>
+            <a class="fc-preview" onclick="event.stopPropagation();viewAnonymized('${f.file_id}')">See what AI sees</a>
           </div>
         </div>`;
       zb.appendChild(row);
