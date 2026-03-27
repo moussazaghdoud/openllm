@@ -249,19 +249,12 @@ async def require_workspace_flexible(request: Request, store: KVStore = Depends(
                 # User with assigned workspace
                 if user.get("workspace_id"):
                     return user["workspace_id"]
-                # Admin user — get workspace_id from JWT payload or request body
+                # Admin user — get workspace_id from JWT payload or fallback
                 if user.get("role") == "admin":
                     ws = payload.get("ws")
                     if ws:
                         return ws
-                    # Try request body (for JSON endpoints like /v1/chat/completions)
-                    try:
-                        body = await request.json()
-                        if body.get("workspace_id"):
-                            return body["workspace_id"]
-                    except Exception:
-                        pass
-                    # Try first workspace as fallback for admin
+                    # Fallback: use first available workspace
                     keys = await store.scan_iter("ws:*:meta")
                     if keys:
                         return keys[0].split(":")[1]
