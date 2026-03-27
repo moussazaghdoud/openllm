@@ -8,24 +8,24 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from fastapi import Depends, Header, HTTPException, Request, status
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.config import settings
 from app.storage import KVStore, get_store
 
 # ── Password hashing ──────────────────────────────────────
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    pwd = password.encode("utf-8")[:72]
+    return bcrypt.hashpw(pwd, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    pwd = plain.encode("utf-8")[:72]
+    return bcrypt.checkpw(pwd, hashed.encode("utf-8"))
 
 
 # ── API key helpers (unchanged) ───────────────────────────
