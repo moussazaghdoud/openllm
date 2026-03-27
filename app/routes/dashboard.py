@@ -46,6 +46,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sa
 .badge-green { background: rgba(0,184,148,.15); color: var(--green); }
 .badge-red { background: rgba(225,112,85,.15); color: var(--red); }
 .badge-orange { background: rgba(253,203,110,.15); color: var(--orange); }
+.badge-purple { background: rgba(108,92,231,.15); color: var(--accent2); }
 
 /* Auth screen */
 .auth-screen { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; background: var(--bg); }
@@ -304,6 +305,50 @@ textarea { resize: vertical; min-height: 60px; }
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="closeModal('keyModal')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Create User</h2>
+      <button class="modal-close" onclick="closeModal('userModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="userEmail" placeholder="user@company.com" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="userPassword" placeholder="Minimum 4 characters" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Role</label>
+          <select id="userRole" onchange="document.getElementById('userWsRow').style.display=this.value==='user'?'flex':'none'">
+            <option value="user">User (access /chat)</option>
+            <option value="admin">Admin (access /admin + /chat)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" id="userWsRow">
+        <div class="form-group">
+          <label>Workspace</label>
+          <select id="userWorkspace"></select>
+          <span style="font-size:11px;color:var(--text2);margin-top:4px">The workspace this user can access in /chat</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('userModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreateUser()">Create User</button>
     </div>
   </div>
 </div>
@@ -624,39 +669,62 @@ async function loadUsers() {
   } catch(e) {}
 }
 
+function getWsName(wsId) {
+  const ws = workspaces.find(w => w.id === wsId);
+  return ws ? ws.name : wsId || '—';
+}
+
+function getWsMode(wsId) {
+  const ws = workspaces.find(w => w.id === wsId);
+  return ws ? ws.deployment_mode : '';
+}
+
 function renderUsers() {
   let el = document.getElementById('usersGrid');
   if (!el) return;
-  el.innerHTML = users.map(u => `
-    <div class="card" style="padding:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <strong>${u.email}</strong>
-          <span class="badge ${u.role==='admin'?'badge-purple':'badge-green'}" style="margin-left:8px">${u.role}</span>
-        </div>
-        <button class="btn btn-sm" style="color:#EF4444;border-color:#EF4444" onclick="deleteUser('${u.id}')">Delete</button>
-      </div>
-      ${u.workspace_id ? '<div style="font-size:11px;color:var(--text3);margin-top:4px">Workspace: '+u.workspace_id+'</div>' : ''}
-    </div>
-  `).join('');
+  if (!users.length) { el.innerHTML = '<div class="empty"><p>No users yet. Create one to get started.</p></div>'; return; }
+  el.innerHTML = `<table><thead><tr><th>Email</th><th>Role</th><th>Workspace</th><th>Topology</th><th></th></tr></thead><tbody>` +
+    users.map(u => {
+      const mode = getWsMode(u.workspace_id);
+      const modeBadge = mode === 'cloud' ? '<span class="badge badge-green" style="font-size:10px">Cloud</span>'
+        : mode === 'onprem' ? '<span class="badge badge-orange" style="font-size:10px">On-Prem</span>' : '—';
+      return `<tr>
+        <td><strong>${u.email}</strong></td>
+        <td><span class="badge ${u.role==='admin'?'badge-orange':'badge-green'}">${u.role}</span></td>
+        <td>${u.workspace_id ? getWsName(u.workspace_id) : '<span style="color:var(--text2)">All (admin)</span>'}</td>
+        <td>${u.workspace_id ? modeBadge : '—'}</td>
+        <td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">Delete</button></td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
 }
 
-async function createUser() {
-  const email = prompt('Email:');
-  if (!email) return;
-  const password = prompt('Password:');
-  if (!password) return;
-  const role = prompt('Role (admin or user):', 'user');
-  let workspace_id = null;
-  if (role === 'user') {
-    workspace_id = prompt('Workspace ID (from list above):');
-  }
+function createUser() {
+  // Populate workspace dropdown
+  const sel = document.getElementById('userWorkspace');
+  sel.innerHTML = workspaces.map(w => {
+    const mode = w.deployment_mode === 'onprem' ? ' (On-Prem)' : ' (Cloud)';
+    return `<option value="${w.id}">${w.name}${mode}</option>`;
+  }).join('');
+  document.getElementById('userEmail').value = '';
+  document.getElementById('userPassword').value = '';
+  document.getElementById('userRole').value = 'user';
+  document.getElementById('userWsRow').style.display = 'flex';
+  openModal('userModal');
+}
+
+async function submitCreateUser() {
+  const email = document.getElementById('userEmail').value.trim();
+  const password = document.getElementById('userPassword').value;
+  const role = document.getElementById('userRole').value;
+  const workspace_id = role === 'user' ? document.getElementById('userWorkspace').value : null;
+  if (!email || !password) { toast('Email and password required', 'error'); return; }
   try {
     const r = await fetch(BASE + '/admin/users', {
       method: 'POST', headers: getHeaders(),
       body: JSON.stringify({ email, password, role, workspace_id })
     });
     if (!r.ok) { const d = await r.json(); toast(d.detail || 'Error', 'error'); return; }
+    closeModal('userModal');
     toast('User created', 'success');
     await loadUsers();
   } catch(e) { toast('Error: ' + e.message, 'error'); }
