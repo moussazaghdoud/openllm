@@ -244,8 +244,8 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
     <div class="shield">&#128737;</div>
     <h2>Secure AI Assistant</h2>
     <p class="subtitle">Your data is anonymized before reaching the AI.<br>No personal or business data ever leaves your control.</p>
-    <input type="email" id="authEmail" placeholder="Email" autocomplete="email" />
-    <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" />
+    <input type="email" id="authEmail" placeholder="Email" autocomplete="email" value="admin@securellm.local" />
+    <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" value="admin" />
     <button class="btn" onclick="login()">Start Chatting</button>
     <p id="authError" style="color:#EF4444;font-size:12px;margin-top:8px;display:none"></p>
   </div>

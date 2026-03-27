@@ -149,8 +149,8 @@ textarea { resize: vertical; min-height: 60px; }
     <div class="logo-icon">S</div>
     <h2>Admin Dashboard</h2>
     <p class="subtitle">Sign in to manage workspaces and users</p>
-    <input type="email" id="adminEmail" placeholder="Email" autocomplete="email" />
-    <input type="password" id="adminPassword" placeholder="Password" autocomplete="current-password" />
+    <input type="email" id="adminEmail" placeholder="Email" autocomplete="email" value="admin@securellm.local" />
+    <input type="password" id="adminPassword" placeholder="Password" autocomplete="current-password" value="admin" />
     <button class="btn-login" onclick="checkAuth()">Sign In</button>
     <p class="auth-error" id="authError"></p>
   </div>
