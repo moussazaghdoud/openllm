@@ -8,9 +8,9 @@ import json
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from app.auth import require_workspace, require_workspace_flexible
+from app.auth import require_workspace_flexible
 from app.engine.pipeline import PrivacyPipeline
 from app.storage import KVStore, get_store
 from app import workspace as ws_ops
@@ -108,12 +108,10 @@ def extract_text(content: bytes, filename: str) -> str:
 
 @router.post("/upload")
 async def upload_file(
-    request: Request,
     file: UploadFile = File(...),
-    x_api_key: str = Header(None, alias="X-API-Key"),
+    workspace_id: str = Depends(require_workspace_flexible),
     store: KVStore = Depends(get_store),
 ):
-    workspace_id = await require_workspace_flexible(request, store)
     """Upload a file, extract text, anonymize it, and store for chat context.
 
     Returns a file_id that can be referenced in chat messages.
@@ -136,7 +134,6 @@ async def upload_file(
                 method="POST",
                 path="/v1/upload-raw",
                 headers={
-                    "X-API-Key": x_api_key,
                     "Content-Type": "application/json",
                 },
                 body=json.dumps({
@@ -259,11 +256,10 @@ async def upload_file_raw(
 
 @router.get("/files/{file_id:path}")
 async def get_file_info(
-    request: Request,
     file_id: str,
+    workspace_id: str = Depends(require_workspace_flexible),
     store: KVStore = Depends(get_store),
 ):
-    workspace_id = await require_workspace_flexible(request, store)
     """Get file metadata (not the content — content is only used in chat context)."""
     if not file_id.startswith(f"file:{workspace_id}:"):
         raise HTTPException(403, "File does not belong to this workspace")
