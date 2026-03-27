@@ -8,7 +8,7 @@ import json
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from app.auth import require_workspace_flexible
 from app.engine.pipeline import PrivacyPipeline
@@ -108,10 +108,11 @@ def extract_text(content: bytes, filename: str) -> str:
 
 @router.post("/upload")
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
-    workspace_id: str = Depends(require_workspace_flexible),
     store: KVStore = Depends(get_store),
 ):
+    workspace_id = await require_workspace_flexible(request, store)
     """Upload a file, extract text, anonymize it, and store for chat context.
 
     Returns a file_id that can be referenced in chat messages.
