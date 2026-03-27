@@ -13,7 +13,7 @@ import logging
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.auth import require_workspace
+from app.auth import require_workspace, require_workspace_flexible
 from app.engine.pipeline import PrivacyPipeline
 from app.models import (
     AnonymizeRequest,
@@ -53,7 +53,7 @@ async def _forward_to_onprem(
 async def anonymize(
     req: AnonymizeRequest,
     request: Request,
-    workspace_id: str = Depends(require_workspace),
+    workspace_id: str = Depends(require_workspace_flexible),
     store: KVStore = Depends(get_store),
 ):
     if req.workspace_id != workspace_id:
@@ -93,7 +93,7 @@ async def anonymize(
 async def deanonymize(
     req: DeanonymizeRequest,
     request: Request,
-    workspace_id: str = Depends(require_workspace),
+    workspace_id: str = Depends(require_workspace_flexible),
     store: KVStore = Depends(get_store),
 ):
     if not req.mapping_id.startswith(f"map:{workspace_id}:"):
@@ -118,7 +118,7 @@ async def deanonymize(
 async def llm_proxy(
     req: LLMProxyRequest,
     request: Request,
-    workspace_id: str = Depends(require_workspace),
+    workspace_id: str = Depends(require_workspace_flexible),
     store: KVStore = Depends(get_store),
 ):
     """Privacy-first LLM proxy — anonymize -> LLM -> deanonymize.

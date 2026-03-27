@@ -243,8 +243,10 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
     <div class="shield">&#128737;</div>
     <h2>Secure AI Assistant</h2>
     <p class="subtitle">Your data is anonymized before reaching the AI.<br>No personal or business data ever leaves your control.</p>
-    <input type="password" id="authKey" value="slm_G_inHOaazg6-dcbHswPudsgS8G1w6FWltDnVqFus_94" placeholder="API Key" />
+    <input type="email" id="authEmail" placeholder="Email" autocomplete="email" />
+    <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" />
     <button class="btn" onclick="login()">Start Chatting</button>
+    <p id="authError" style="color:#EF4444;font-size:12px;margin-top:8px;display:none"></p>
   </div>
 </div>
 
@@ -313,10 +315,10 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
 
 <script>
 const B = window.location.origin;
-let apiKey='', wsId='', wsInfo=null, history=[];
+let wsId='', wsInfo=null, history=[];
 let attachedFiles=[]; // {file_id, filename, size, char_count, status:'uploading'|'wave1'|'wave2'|'ready'}
 
-function hdr(){return{'X-API-Key':apiKey,'Content-Type':'application/json'}}
+function hdr(){return{'Content-Type':'application/json'}}
 function toast(m,t=''){const e=document.createElement('div');e.className='toast '+t;e.textContent=m;document.body.appendChild(e);setTimeout(()=>e.remove(),3500)}
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function fmtSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB'}
@@ -324,20 +326,29 @@ function fIcon(n){const e=n.split('.').pop().toLowerCase();const m={pdf:'&#12819
 
 // ── Auth ──
 async function login(){
-  apiKey=document.getElementById('authKey').value.trim();
-  if(!apiKey)return toast('Enter your API key','error');
+  const email=document.getElementById('authEmail').value.trim();
+  const password=document.getElementById('authPassword').value;
+  const errEl=document.getElementById('authError');
+  errEl.style.display='none';
+  if(!email||!password){errEl.textContent='Enter email and password';errEl.style.display='block';return}
   try{
-    const r=await fetch(B+'/portal/api/workspace',{headers:hdr()});
-    if(!r.ok)return toast('Invalid API key','error');
-    wsInfo=await r.json(); wsId=wsInfo.id;
+    const r=await fetch(B+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password}),credentials:'same-origin'});
+    if(!r.ok){const d=await r.json().catch(()=>({}));errEl.textContent=d.detail||'Invalid email or password';errEl.style.display='block';return}
+    const data=await r.json();
+    // Now fetch workspace info (cookie is set)
+    const wr=await fetch(B+'/portal/api/workspace',{credentials:'same-origin'});
+    if(!wr.ok){errEl.textContent='No workspace linked to this account';errEl.style.display='block';return}
+    wsInfo=await wr.json(); wsId=wsInfo.id;
     document.getElementById('authScreen').style.display='none';
     document.getElementById('app').style.display='flex';
     document.getElementById('wsName').textContent=wsInfo.name;
     document.getElementById('privacyPill').style.display='flex';
     document.getElementById('chatInput').focus();
-  }catch(e){toast('Connection error','error')}
+  }catch(e){errEl.textContent='Connection error';errEl.style.display='block'}
 }
-document.getElementById('authKey').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+document.getElementById('authPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+// Auto-login if session cookie exists
+(async()=>{try{const r=await fetch(B+'/auth/me',{credentials:'same-origin'});if(r.ok){const wr=await fetch(B+'/portal/api/workspace',{credentials:'same-origin'});if(wr.ok){wsInfo=await wr.json();wsId=wsInfo.id;document.getElementById('authScreen').style.display='none';document.getElementById('app').style.display='flex';document.getElementById('wsName').textContent=wsInfo.name;document.getElementById('privacyPill').style.display='flex'}}}catch(e){}})();
 
 // ── File Upload with Magic Animation ──
 async function handleFiles(fileList){
@@ -373,7 +384,7 @@ async function handleFiles(fileList){
         }
       },200);
 
-      const r=await fetch(B+'/v1/upload',{method:'POST',headers:{'X-API-Key':apiKey},body:form});
+      const r=await fetch(B+'/v1/upload',{method:'POST',body:form,credentials:'same-origin'});
       clearInterval(progressInterval);
 
       if(!r.ok){const err=await r.json();toast('Upload failed: '+(err.detail||'error'),'error');attachedFiles.splice(idx,1);renderFiles();continue}
@@ -458,7 +469,7 @@ function toggleSelect(i, checked){
 
 async function viewAnonymized(fileId){
   try{
-    const r=await fetch(B+'/v1/files/'+encodeURIComponent(fileId),{headers:hdr()});
+    const r=await fetch(B+'/v1/files/'+encodeURIComponent(fileId),{headers:hdr(),credentials:'same-origin'});
     if(!r.ok){toast('Could not load preview','error');return}
     const d=await r.json();
     let h=esc(d.anonymized_text)
@@ -504,7 +515,7 @@ async function translateFile(i,lang){
   if(!lang){lang=prompt('Translate to which language?','French');if(!lang)return;}
   addMsg('system','Translating '+f.filename+' to '+lang+'...');
   try{
-    const r=await fetch(B+'/v1/translate',{method:'POST',headers:hdr(),body:JSON.stringify({file_id:f.file_id,language:lang})});
+    const r=await fetch(B+'/v1/translate',{method:'POST',headers:hdr(),body:JSON.stringify({file_id:f.file_id,language:lang}),credentials:'same-origin'});
     const d=await r.json();
     if(!r.ok){addMsg('system','Error: '+(d.detail||'failed'));return}
     addMsg('assistant',`Translation complete: **${d.filename}**\n${d.paragraphs_translated} paragraphs translated.\n\n[Download](${B}${d.download_url})`);
@@ -542,7 +553,7 @@ async function send(){
   const file_ids=getSelectedFiles().map(f=>f.file_id);
 
   try{
-    const r=await fetch(B+'/v1/chat/completions',{method:'POST',headers:hdr(),body:JSON.stringify({workspace_id:wsId,messages:history,model:'default',file_ids})});
+    const r=await fetch(B+'/v1/chat/completions',{method:'POST',headers:hdr(),body:JSON.stringify({workspace_id:wsId,messages:history,model:'default',file_ids}),credentials:'same-origin'});
     typing.remove();document.getElementById('sendBtn').disabled=false;
     if(!r.ok){const err=await r.json();addMsg('system','Error: '+(err.detail||'Something went wrong'));return}
     const data=await r.json();

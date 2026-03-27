@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from fastapi import Request as FastAPIRequest
 
-from app.auth import require_workspace
+from app.auth import require_workspace_flexible as require_workspace
 from app.engine.translator import (
     call_translation,
     extract_docx_paragraphs, rebuild_docx,

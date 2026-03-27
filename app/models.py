@@ -76,6 +76,7 @@ class WorkspaceResponse(BaseModel):
     ppi_term_count: int
     llm: LLMConfigResponse | None = None
     deployment_mode: str = "cloud"
+    max_file_size_mb: int = 50
     api_key: str | None = None  # only returned on creation
 
 
@@ -84,6 +85,7 @@ class WorkspaceUpdate(BaseModel):
     ppi_terms: list[str] | None = None
     llm: LLMConfig | None = None
     deployment_mode: str | None = None
+    max_file_size_mb: int | None = None
 
 
 # ── Portal (Customer-facing) ─────────────────────────────
@@ -118,6 +120,35 @@ class SubKeyResponse(BaseModel):
 class SubKeyCreated(BaseModel):
     label: str
     api_key: str
+    created_at: str
+
+
+# ── Users / Auth ─────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
+
+
+class UserCreate(BaseModel):
+    email: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=4)
+    role: str = Field("user", description="'admin' or 'user'")
+    workspace_id: str | None = Field(None, description="Workspace to link user to (required for role=user)")
+
+
+class UserUpdate(BaseModel):
+    email: str | None = None
+    password: str | None = None
+    role: str | None = None
+    workspace_id: str | None = None
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    role: str
+    workspace_id: str | None = None
     created_at: str
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.auth import require_admin
+from app.auth import require_admin_flexible as require_admin
 from app.models import (
     LLMConfig, LLMConfigResponse,
     WorkspaceCreate, WorkspaceResponse, WorkspaceUpdate,
@@ -63,6 +63,7 @@ async def update_workspace(
     ws = await ws_ops.update_workspace(
         store, ws_id, body.name, body.ppi_terms, llm_dict,
         deployment_mode=body.deployment_mode,
+        max_file_size_mb=body.max_file_size_mb,
     )
     if not ws:
         raise HTTPException(404, "Workspace not found")
@@ -92,6 +93,33 @@ async def set_llm_config(
     ws = await ws_ops.get_workspace(store, ws_id)
     if not ws:
         raise HTTPException(404, "Workspace not found")
+
+    # Validate the API key by making a test call
+    import httpx
+    upstream_url = body.upstream_url.rstrip("/")
+    try:
+        if body.provider == "anthropic":
+            async with httpx.AsyncClient(timeout=10, verify=False) as client:
+                r = await client.get(
+                    f"{upstream_url}/v1/models",
+                    headers={"x-api-key": body.api_key, "anthropic-version": "2023-06-01"},
+                )
+        else:
+            async with httpx.AsyncClient(timeout=10, verify=False) as client:
+                r = await client.get(
+                    f"{upstream_url}/v1/models",
+                    headers={"Authorization": f"Bearer {body.api_key}"},
+                )
+        if r.status_code == 401:
+            raise HTTPException(400, "Invalid API key — authentication failed")
+        if r.status_code == 403:
+            raise HTTPException(400, "API key forbidden — check permissions")
+    except httpx.ConnectError:
+        raise HTTPException(400, f"Cannot reach {upstream_url} — check the URL")
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # Other errors (timeout, etc.) — save anyway, might work later
 
     await ws_ops.update_workspace(store, ws_id, llm=body.model_dump())
     return LLMConfigResponse(

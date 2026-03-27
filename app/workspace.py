@@ -18,7 +18,7 @@ async def create_workspace(
     ws_id = uuid.uuid4().hex[:12]
     api_key = generate_api_key()
 
-    ws_data = {"id": ws_id, "name": name, "deployment_mode": "cloud"}
+    ws_data = {"id": ws_id, "name": name, "deployment_mode": "cloud", "max_file_size_mb": 50}
     await store.set(f"ws:{ws_id}", json.dumps(ws_data))
     await store.set(f"apikey:{hash_key(api_key)}", ws_id)
 
@@ -43,6 +43,7 @@ async def get_workspace(store: KVStore, ws_id: str) -> dict | None:
     ws = json.loads(raw)
 
     ws.setdefault("deployment_mode", "cloud")
+    ws.setdefault("max_file_size_mb", 50)
 
     raw_terms = await store.get(f"ws:{ws_id}:ppi_terms")
     ws["ppi_term_count"] = len(json.loads(raw_terms)) if raw_terms else 0
@@ -60,6 +61,15 @@ async def get_workspace(store: KVStore, ws_id: str) -> dict | None:
         ws["llm"] = None
 
     return ws
+
+
+async def get_max_file_size(store: KVStore, ws_id: str) -> int:
+    """Get workspace max file size in bytes."""
+    raw = await store.get(f"ws:{ws_id}")
+    if not raw:
+        return 50 * 1024 * 1024
+    ws = json.loads(raw)
+    return ws.get("max_file_size_mb", 50) * 1024 * 1024
 
 
 async def get_deployment_mode(store: KVStore, ws_id: str) -> str:
@@ -81,7 +91,7 @@ async def get_llm_config(store: KVStore, ws_id: str) -> dict | None:
 async def update_workspace(
     store: KVStore, ws_id: str, name: str | None = None,
     ppi_terms: list[str] | None = None, llm: dict | None = None,
-    deployment_mode: str | None = None,
+    deployment_mode: str | None = None, max_file_size_mb: int | None = None,
 ) -> dict | None:
     raw = await store.get(f"ws:{ws_id}")
     if not raw:
@@ -94,6 +104,9 @@ async def update_workspace(
         changed = True
     if deployment_mode is not None:
         ws["deployment_mode"] = deployment_mode
+        changed = True
+    if max_file_size_mb is not None:
+        ws["max_file_size_mb"] = max_file_size_mb
         changed = True
     if changed:
         await store.set(f"ws:{ws_id}", json.dumps(ws))

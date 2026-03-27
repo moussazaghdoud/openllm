@@ -11,9 +11,9 @@ import logging
 from fastapi import FastAPI
 
 from app.middleware import ObservabilityMiddleware
-from app.storage import close_store
+from app.storage import close_store, get_store
 from app import nats_router
-from app.routes import anonymize, chat, dashboard, files, health, portal, translate, workspaces
+from app.routes import anonymize, auth_routes, chat, dashboard, files, health, portal, translate, workspaces
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +29,7 @@ app = FastAPI(
 # Observability: request tracing, metrics, audit logging
 app.add_middleware(ObservabilityMiddleware)
 
+app.include_router(auth_routes.router)
 app.include_router(dashboard.router)
 app.include_router(health.router)
 app.include_router(anonymize.router)
@@ -42,6 +43,10 @@ app.include_router(translate.router)
 @app.on_event("startup")
 async def startup():
     await nats_router.connect()
+    # Seed default admin user
+    from app.auth import seed_admin
+    store = await get_store()
+    await seed_admin(store)
 
 
 @app.on_event("shutdown")

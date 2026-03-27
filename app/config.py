@@ -18,6 +18,15 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # JWT
+    jwt_secret_key: str = "change-me-jwt-secret"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 480  # 8 hours
+
+    # Default admin account (created on first startup)
+    admin_email: str = "admin@securellm.local"
+    admin_password: str = "admin"
+
     # Limits
     max_file_size_mb: int = 50
 

@@ -137,10 +137,12 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
 </div>
 
-<div class="auth-bar">
-  <label>Admin Key</label>
-  <input type="password" id="adminKey" placeholder="Enter your X-Admin-Key..." />
+<div class="auth-bar" id="authBar">
+  <label>Admin Login</label>
+  <input type="email" id="adminEmail" placeholder="Email" value="admin@securellm.local" />
+  <input type="password" id="adminPassword" placeholder="Password" />
   <button class="btn btn-primary btn-sm" onclick="checkAuth()">Connect</button>
+  <span id="authError" style="color:#EF4444;font-size:12px;margin-left:8px"></span>
 </div>
 
 <div class="container" id="mainContent" style="display:none">
@@ -160,6 +162,17 @@ textarea { resize: vertical; min-height: 60px; }
       <button class="btn btn-primary btn-sm" onclick="openCreateModal()">+ New Workspace</button>
     </div>
     <div class="section-body" id="workspacesBody">
+      <div class="empty"><p>Loading...</p></div>
+    </div>
+  </div>
+
+  <!-- Users -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Users</h2>
+      <button class="btn btn-primary btn-sm" onclick="createUser()">+ New User</button>
+    </div>
+    <div class="section-body" id="usersGrid">
       <div class="empty"><p>Loading...</p></div>
     </div>
   </div>
@@ -286,11 +299,13 @@ textarea { resize: vertical; min-height: 60px; }
 
 <script>
 const BASE = window.location.origin;
-let adminKey = '';
 let workspaces = [];
 let wsApiKeys = {};  // ws_id -> api_key (only for current session)
 
-function getHeaders() { return { 'X-Admin-Key': adminKey, 'Content-Type': 'application/json' }; }
+function getHeaders() { return { 'Content-Type': 'application/json' }; }
+// Patch fetch to always include credentials
+const _origFetch = window.fetch;
+window.fetch = function(url, opts = {}) { opts.credentials = opts.credentials || 'same-origin'; return _origFetch(url, opts); };
 
 function toast(msg, type = '') {
   const t = document.createElement('div');
@@ -305,18 +320,27 @@ function closeModal(id) { document.getElementById(id).classList.remove('active')
 
 // Auth
 async function checkAuth() {
-  adminKey = document.getElementById('adminKey').value;
-  if (!adminKey) return toast('Enter admin key', 'error');
+  const email = document.getElementById('adminEmail').value.trim();
+  const password = document.getElementById('adminPassword').value;
+  const errEl = document.getElementById('authError');
+  errEl.textContent = '';
+  if (!email || !password) { errEl.textContent = 'Enter email and password'; return; }
   try {
-    // Try listing workspaces as auth check — we'll use health for now
-    const r = await fetch(BASE + '/health');
-    const h = await r.json();
+    const lr = await fetch(BASE + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }), credentials: 'same-origin' });
+    if (!lr.ok) { const d = await lr.json().catch(() => ({})); errEl.textContent = d.detail || 'Invalid credentials'; return; }
+    const data = await lr.json();
+    if (data.user.role !== 'admin') { errEl.textContent = 'Admin access required'; return; }
+    document.getElementById('authBar').style.display = 'none';
     document.getElementById('mainContent').style.display = 'block';
+    const h = await (await fetch(BASE + '/health')).json();
     updateHealth(h);
     await loadWorkspaces();
-    toast('Connected', 'success');
-  } catch(e) { toast('Connection failed: ' + e.message, 'error'); }
+    await loadUsers();
+    toast('Connected as ' + data.user.email, 'success');
+  } catch(e) { errEl.textContent = 'Connection failed: ' + e.message; }
 }
+// Auto-login if session exists
+(async()=>{try{const r=await fetch(BASE+'/auth/me',{credentials:'same-origin'});if(r.ok){const d=await r.json();if(d.role==='admin'){document.getElementById('authBar').style.display='none';document.getElementById('mainContent').style.display='block';const h=await(await fetch(BASE+'/health')).json();updateHealth(h);await loadWorkspaces();await loadUsers()}}}catch(e){}})();
 
 // Health
 async function updateHealth(h) {
@@ -360,16 +384,18 @@ function renderWorkspaces() {
     return;
   }
 
-  let html = '<table><thead><tr><th>Name</th><th>ID</th><th>PPI Terms</th><th>LLM</th><th style="width:180px">Actions</th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>Name</th><th>ID</th><th>PPI Terms</th><th>LLM</th><th>Max File</th><th style="width:180px">Actions</th></tr></thead><tbody>';
   workspaces.forEach(ws => {
     const llmBadge = ws.llm && ws.llm.configured
       ? `<span class="badge badge-green">${ws.llm.provider}</span>`
       : '<span class="badge badge-orange">not configured</span>';
+    const maxFile = ws.max_file_size_mb || 50;
     html += `<tr>
       <td><strong>${esc(ws.name)}</strong></td>
       <td><span class="mono">${ws.id}</span></td>
       <td>${ws.ppi_term_count}</td>
       <td>${llmBadge}</td>
+      <td><input type="number" value="${maxFile}" min="1" max="500" style="width:60px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:4px;text-align:center" onchange="updateMaxFile('${ws.id}',this.value)"> MB</td>
       <td>
         <button class="btn btn-ghost btn-sm" onclick="openLLMModal('${ws.id}')">LLM</button>
         <button class="btn btn-danger btn-sm" onclick="deleteWorkspace('${ws.id}')">Delete</button>
@@ -440,6 +466,14 @@ function copyKey() {
 }
 
 // Delete workspace
+async function updateMaxFile(id, val) {
+  const mb = parseInt(val);
+  if (isNaN(mb) || mb < 1) return toast('Invalid size', 'error');
+  const r = await fetch(`${B}/admin/workspaces/${id}`, {method:'PATCH', headers:getHeaders(), body:JSON.stringify({max_file_size_mb:mb})});
+  if (r.ok) toast(`Max file size: ${mb} MB`, 'success');
+  else toast('Update failed', 'error');
+}
+
 async function deleteWorkspace(id) {
   if (!confirm('Delete this workspace? This cannot be undone.')) return;
   try {
@@ -565,14 +599,70 @@ document.getElementById('llmProvider').addEventListener('change', function() {
   }
 });
 
+// ── User Management ──
+let users = [];
+async function loadUsers() {
+  try {
+    const r = await fetch(BASE + '/admin/users', { headers: getHeaders() });
+    if (!r.ok) return;
+    users = await r.json();
+    renderUsers();
+  } catch(e) {}
+}
+
+function renderUsers() {
+  let el = document.getElementById('usersGrid');
+  if (!el) return;
+  el.innerHTML = users.map(u => `
+    <div class="card" style="padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <strong>${u.email}</strong>
+          <span class="badge ${u.role==='admin'?'badge-purple':'badge-green'}" style="margin-left:8px">${u.role}</span>
+        </div>
+        <button class="btn btn-sm" style="color:#EF4444;border-color:#EF4444" onclick="deleteUser('${u.id}')">Delete</button>
+      </div>
+      ${u.workspace_id ? '<div style="font-size:11px;color:var(--text3);margin-top:4px">Workspace: '+u.workspace_id+'</div>' : ''}
+    </div>
+  `).join('');
+}
+
+async function createUser() {
+  const email = prompt('Email:');
+  if (!email) return;
+  const password = prompt('Password:');
+  if (!password) return;
+  const role = prompt('Role (admin or user):', 'user');
+  let workspace_id = null;
+  if (role === 'user') {
+    workspace_id = prompt('Workspace ID (from list above):');
+  }
+  try {
+    const r = await fetch(BASE + '/admin/users', {
+      method: 'POST', headers: getHeaders(),
+      body: JSON.stringify({ email, password, role, workspace_id })
+    });
+    if (!r.ok) { const d = await r.json(); toast(d.detail || 'Error', 'error'); return; }
+    toast('User created', 'success');
+    await loadUsers();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function deleteUser(id) {
+  if (!confirm('Delete this user?')) return;
+  await fetch(BASE + '/admin/users/' + id, { method: 'DELETE', headers: getHeaders() });
+  toast('User deleted', 'success');
+  await loadUsers();
+}
+
 // Init: check health on load
 fetch(BASE + '/health').then(r => r.json()).then(updateHealth).catch(() => {
   document.getElementById('healthBadge').textContent = 'offline';
   document.getElementById('healthBadge').className = 'badge badge-red';
 });
 
-// Enter key on admin key input
-document.getElementById('adminKey').addEventListener('keydown', e => { if (e.key === 'Enter') checkAuth(); });
+// Enter key on password input
+document.getElementById('adminPassword').addEventListener('keydown', e => { if (e.key === 'Enter') checkAuth(); });
 </script>
 </body>
 </html>

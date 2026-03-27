@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 
-from app.auth import require_workspace
+from app.auth import require_workspace_flexible as require_workspace
 from app.models import (
     PPITermsResponse, PPITermsUpdate,
     PortalWorkspaceInfo, SubKeyCreate, SubKeyCreated, SubKeyResponse,
