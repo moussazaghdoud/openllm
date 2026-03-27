@@ -235,6 +235,7 @@ body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--
     <div class="pill pill-green" id="privacyPill" style="display:none"><span class="pill-dot"></span> Privacy Active</div>
     <button onclick="toggleTheme()" id="themeBtn" style="background:none;border:1px solid var(--border);border-radius:8px;width:36px;height:36px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:var(--transition);color:var(--text2)" title="Toggle light/dark mode">&#127769;</button>
     <a href="/portal" style="color:var(--text3);font-size:12px;text-decoration:none;transition:var(--transition)" onmouseover="this.style.color='var(--accent2)'" onmouseout="this.style.color='var(--text3)'">Portal</a>
+    <button onclick="logout()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:4px 12px;cursor:pointer;font-size:11px;color:var(--text3);transition:var(--transition)" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">Logout</button>
   </div>
 </div>
 
@@ -326,6 +327,11 @@ function fmtSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(
 function fIcon(n){const e=n.split('.').pop().toLowerCase();const m={pdf:'&#128196;',docx:'&#128196;',doc:'&#128196;',pptx:'&#128202;',ppt:'&#128202;',xlsx:'&#128202;',xls:'&#128202;',csv:'&#128202;',txt:'&#128196;',md:'&#128196;',json:'&#128203;',py:'&#128187;',js:'&#128187;'};return m[e]||'&#128196;'}
 
 // ── Auth ──
+async function logout(){
+  await fetch(B+'/auth/logout',{method:'POST',credentials:'same-origin'});
+  window.location.reload();
+}
+
 async function login(){
   const email=document.getElementById('authEmail').value.trim();
   const password=document.getElementById('authPassword').value;
