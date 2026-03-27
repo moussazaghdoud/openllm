@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # Limits
+    max_file_size_mb: int = 50
+
     # NATS (for on-premise tunnel)
     nats_enabled: bool = False
     nats_url: str = "nats://localhost:4222"
